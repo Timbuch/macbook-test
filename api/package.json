@@ -1,0 +1,9 @@
+{
+  "name": "groundwork-api",
+  "version": "1.0.0",
+  "description": "Groundwork SWA API — PDF → Deal extraction via mck-claude-proxy.",
+  "main": "extract/index.js",
+  "dependencies": {
+    "pdf-parse": "^1.1.1"
+  }
+}

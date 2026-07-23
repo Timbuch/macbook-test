@@ -51,6 +51,26 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   horizon: 10,
 };
 
+// ── Sale & delivery intake (asked of the tool's user; feed the base deal) ──
+
+export type SalesChannel = "agent" | "private" | "tender" | "inhouse";
+export type SellDown = "atonce" | "staged" | "bulk";
+export type WhoBuilds = "contractor" | "developer" | "unsure";
+
+/** Sales channel → selling-cost model (commission + per-lot marketing/legal). */
+export const SALES_CHANNELS: Record<SalesChannel, { label: string; commission: number; marketingLegalPerLot: number }> = {
+  agent: { label: "Licensed real estate agent", commission: 0.0275, marketingLegalPerLot: 3_000 },
+  private: { label: "Private sale (no agent)", commission: 0, marketingLegalPerLot: 2_500 },
+  tender: { label: "Tender / deadline sale", commission: 0.0275, marketingLegalPerLot: 8_000 },
+  inhouse: { label: "Developer's in-house team", commission: 0.01, marketingLegalPerLot: 4_000 },
+};
+
+/** Apply the chosen sales channel to a deal, returning an effective deal. */
+export function withSalesChannel(deal: Deal, channel: SalesChannel): Deal {
+  const c = SALES_CHANNELS[channel];
+  return { ...deal, commission: c.commission, marketingLegalPerLot: c.marketingLegalPerLot };
+}
+
 /** Option cards → engine configs. `keepN` selects the C option's held count. */
 export function optionSet(keepN = 2): OptionConfig[] {
   return [

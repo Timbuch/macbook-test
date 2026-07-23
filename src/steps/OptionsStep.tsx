@@ -1,10 +1,17 @@
 import type { Assumptions, Deal } from "../engine";
+import type { SalesChannel, SellDown, WhoBuilds } from "../defaults";
 import { optionSet } from "../defaults";
+import type { TaxInputs } from "../tax";
+import type { Intake } from "../App";
 
 interface Props {
   deal: Deal;
   assumptions: Assumptions;
   patch: (p: Partial<Assumptions>) => void;
+  tax: TaxInputs;
+  patchTax: (p: Partial<TaxInputs>) => void;
+  intake: Intake;
+  patchIntake: (p: Partial<Intake>) => void;
   keepN: number;
   setKeepN: (n: number) => void;
   selected: Record<string, boolean>;
@@ -20,7 +27,8 @@ const OPTION_BLURB: Record<string, string> = {
 };
 
 export function OptionsStep(props: Props) {
-  const { deal, assumptions, patch, keepN, setKeepN, selected, setSelected, onNext } = props;
+  const { deal, assumptions, patch, tax, patchTax, intake, patchIntake, keepN, setKeepN, selected, setSelected, onNext } =
+    props;
   const options = optionSet(keepN);
   const toggle = (k: string) => setSelected({ ...selected, [k]: !selected[k] });
 
@@ -113,6 +121,90 @@ export function OptionsStep(props: Props) {
             <Pct label="Rent growth p.a." v={assumptions.rentG} on={(n) => patch({ rentG: n })} />
           </div>
           <Pct label="Capital growth p.a." v={assumptions.capG} on={(n) => patch({ capG: n })} />
+        </div>
+      </div>
+
+      <div className="grid2">
+        <div className="card">
+          <h3>Sale &amp; delivery</h3>
+          <p className="note">Who sells and builds, and how the site sells down.</p>
+          <div className="field" style={{ marginTop: 10 }}>
+            <label>Who sells the sections</label>
+            <select value={intake.salesChannel} onChange={(e) => patchIntake({ salesChannel: e.target.value as SalesChannel })}>
+              <option value="agent">Licensed real estate agent (2.75%)</option>
+              <option value="private">Private sale — no agent (0%)</option>
+              <option value="tender">Tender / deadline sale (2.75% + marketing)</option>
+              <option value="inhouse">Developer&rsquo;s in-house team (1%)</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Sell-down</label>
+            <select value={intake.sellDown} onChange={(e) => patchIntake({ sellDown: e.target.value as SellDown })}>
+              <option value="atonce">All at once on completion</option>
+              <option value="staged">Staged (~1 section / 1.5 months)</option>
+              <option value="bulk">Bulk / one line</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Who builds</label>
+            <select value={intake.whoBuilds} onChange={(e) => patchIntake({ whoBuilds: e.target.value as WhoBuilds })}>
+              <option value="contractor">Main contractor (fixed price)</option>
+              <option value="developer">Developer project-manages</option>
+              <option value="unsure">Not sure yet</option>
+            </select>
+          </div>
+          {intake.sellDown === "staged" && (
+            <p className="note" style={{ color: "var(--amber)" }}>
+              Staged sell-down holding costs aren&rsquo;t modelled yet — treated as completion for now.
+            </p>
+          )}
+        </div>
+
+        <div className="card">
+          <h3>Tax &amp; GST</h3>
+          <p className="note">NZ treatment — indicative. Drives the after-tax view on the analysis.</p>
+          <div className="field" style={{ marginTop: 10 }}>
+            <label>Income tax rate / entity</label>
+            <select
+              value={tax.incomeTaxRate}
+              onChange={(e) => patchTax({ incomeTaxRate: +e.target.value })}
+            >
+              <option value={0.28}>Company — 28%</option>
+              <option value={0.33}>Trust — 33%</option>
+              <option value={0.39}>Top personal — 39%</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>GST registration for the development</label>
+            <select
+              value={tax.gstRegistered ? "yes" : "no"}
+              onChange={(e) => patchTax({ gstRegistered: e.target.value === "yes" })}
+            >
+              <option value="yes">Registered (or will register)</option>
+              <option value="no">Not registered</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>GST when the land was purchased</label>
+            <select value={tax.purchaseGst} onChange={(e) => patchTax({ purchaseGst: e.target.value as TaxInputs["purchaseGst"] })}>
+              <option value="zero-rated">Zero-rated (going concern)</option>
+              <option value="claimed">Claimed GST on purchase</option>
+              <option value="second-hand">Second-hand goods credit</option>
+              <option value="none">No GST / bought privately</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Retained rental homes — GST</label>
+            <select value={tax.heldGst} onChange={(e) => patchTax({ heldGst: e.target.value as TaxInputs["heldGst"] })}>
+              <option value="exempt">Exempt — no GST claim on their build</option>
+              <option value="change-of-use">Claim, then change-of-use adjustment</option>
+            </select>
+          </div>
+          {!tax.gstRegistered && (
+            <p className="note" style={{ color: "var(--amber)" }}>
+              Selling 8 sections is normally a taxable activity — GST registration is usually compulsory at this scale.
+            </p>
+          )}
         </div>
       </div>
 

@@ -15,6 +15,8 @@ import { Chart } from "react-chartjs-2";
 import type { Assumptions, Deal, Result } from "../engine";
 import { benchmark, equityToday, runOption } from "../engine";
 import { optionSet } from "../defaults";
+import type { TaxInputs, TaxResult } from "../tax";
+import { applyTax } from "../tax";
 import { fmt, fmtM, pct, signPct } from "../format";
 
 ChartJS.register(
@@ -27,17 +29,24 @@ const PALETTE: Record<string, string> = { A: "#48773C", B: "#ABC6CA", C: "#3D393
 interface Props {
   deal: Deal;
   assumptions: Assumptions;
+  tax: TaxInputs;
   keepN: number;
   selected: Record<string, boolean>;
   onBack: () => void;
 }
 
-export function AnalysisStep({ deal, assumptions: a, keepN, selected, onBack }: Props) {
+export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBack }: Props) {
   const results = useMemo<Result[]>(
     () => optionSet(keepN).filter((o) => selected[o.key]).map((o) => runOption(deal, a, o)),
     [deal, a, keepN, selected],
   );
+  const taxByKey = useMemo<Record<string, TaxResult>>(() => {
+    const m: Record<string, TaxResult> = {};
+    for (const r of results) m[r.key] = applyTax(deal, a, r, tax);
+    return m;
+  }, [results, deal, a, tax]);
   const [wfIdx, setWfIdx] = useState(0);
+  const [afterTax, setAfterTax] = useState(false);
 
   if (!results.length) {
     return (
@@ -51,12 +60,22 @@ export function AnalysisStep({ deal, assumptions: a, keepN, selected, onBack }: 
 
   const eq0 = equityToday(deal, a);
   const bench = eq0 * Math.pow(1 + a.hurdle, a.horizon);
-  const bestWealth = [...results].sort((x, y) => y.nw10 - x.nw10)[0];
+
+  // Switch the headline metrics between pre-tax and after-tax.
+  const M = (r: Result) => {
+    const t = taxByKey[r.key];
+    return afterTax
+      ? { nw10: t.afterTaxNw10, cagr: t.afterTaxCagr, beats: t.afterTaxBeats, freshCash: t.afterTaxFreshCash, net1: t.afterTaxNet1, wealth: t.afterTaxWealth }
+      : { nw10: r.nw10, cagr: r.cagr, beats: r.beats, freshCash: r.freshCash, net1: r.net1, wealth: r.wealth };
+  };
+
+  const bestWealth = [...results].sort((x, y) => M(y).nw10 - M(x).nw10)[0];
   const leanest = [...results].sort(
-    (x, y) => x.freshCash + x.equityLocked - (y.freshCash + y.equityLocked),
+    (x, y) => M(x).freshCash + x.equityLocked - (M(y).freshCash + y.equityLocked),
   )[0];
   const icrBind = results.some((r) => r.binding === "ICR");
   const wf = results[Math.min(wfIdx, results.length - 1)];
+  const mBest = M(bestWealth);
 
   return (
     <>
@@ -66,14 +85,22 @@ export function AnalysisStep({ deal, assumptions: a, keepN, selected, onBack }: 
         and how wealth grows over {a.horizon} years against the next best use of the money.
       </p>
 
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 18 }}>
+        <div className="wftabs" style={{ margin: 0 }}>
+          <button className={!afterTax ? "on" : ""} onClick={() => setAfterTax(false)}>Pre-tax</button>
+          <button className={afterTax ? "on" : ""} onClick={() => setAfterTax(true)}>After GST &amp; income tax</button>
+        </div>
+        <small>{afterTax ? "Showing indicative after-tax figures." : "Showing pre-tax figures."}</small>
+      </div>
+
       {/* recommendation */}
       <div className="reco">
         <span className="tag">Read on the numbers</span>
         <br />
         Equity today is about <b>{fmtM(eq0)}</b> (the ~{fmtM(deal.asIsValue)} land less the {fmtM(a.mortgage)} mortgage).
         Left in a {pct(a.hurdle)} alternative that becomes <b>{fmtM(bench)}</b> in {a.horizon} years — the bar to beat.{" "}
-        <b>{bestWealth.name}</b> builds the most wealth ({fmtM(bestWealth.nw10)}, {pct(bestWealth.cagr)} p.a.) but ties up{" "}
-        <b>{fmtM(bestWealth.freshCash + bestWealth.equityLocked)}</b> of cash
+        <b>{bestWealth.name}</b> builds the most wealth ({fmtM(mBest.nw10)}, {pct(mBest.cagr)} p.a.) but ties up{" "}
+        <b>{fmtM(mBest.freshCash + bestWealth.equityLocked)}</b> of cash
         {bestWealth.cashYield ? ` at a ${pct(bestWealth.cashYield)} cash yield` : ""}.{" "}
         <b>{leanest.name}</b> keeps the owner most liquid.
         {icrBind && (
@@ -87,14 +114,14 @@ export function AnalysisStep({ deal, assumptions: a, keepN, selected, onBack }: 
 
       {/* KPI row */}
       <div className="grid4" style={{ marginTop: 18 }}>
-        <Kpi l="Fresh cash needed" v={fmt(bestWealth.freshCash)} s={bestWealth.name} />
+        <Kpi l="Fresh cash needed" v={fmt(mBest.freshCash)} s={bestWealth.name} />
         <Kpi
           l="Equity locked up"
           v={fmt(bestWealth.equityLocked)}
           s={bestWealth.cashYield ? pct(bestWealth.cashYield) + " cash yield" : "liquid"}
         />
-        <Kpi l={`Net wealth · yr ${a.horizon}`} v={fmtM(bestWealth.nw10)} s={pct(bestWealth.cagr) + " p.a."} />
-        <Kpi l="Beats hurdle by" v={signPct(bestWealth.beats)} s={"vs " + pct(a.hurdle) + " next best"} />
+        <Kpi l={`Net wealth · yr ${a.horizon}`} v={fmtM(mBest.nw10)} s={pct(mBest.cagr) + " p.a."} />
+        <Kpi l="Beats hurdle by" v={signPct(mBest.beats)} s={"vs " + pct(a.hurdle) + " next best"} />
       </div>
 
       {/* charts */}
@@ -103,7 +130,7 @@ export function AnalysisStep({ deal, assumptions: a, keepN, selected, onBack }: 
           <h3>10-year net wealth</h3>
           <p className="note">Net worth from the project each year vs the benchmark (dashed) — cash out now &amp; grow the equity at the hurdle.</p>
           <div className="chartbox" style={{ marginTop: 10 }}>
-            <WealthChart results={results} deal={deal} a={a} />
+            <WealthChart results={results} deal={deal} a={a} wealthOf={(r) => M(r).wealth} />
           </div>
           <div className="legend">
             {results.map((r) => (
@@ -250,21 +277,66 @@ export function AnalysisStep({ deal, assumptions: a, keepN, selected, onBack }: 
             </tr>
           </thead>
           <tbody>
-            {results.map((r) => (
-              <tr key={r.key}>
-                <td><b>{r.name}</b></td>
-                <td className="num">{fmt(r.freshCash)}</td>
-                <td className="num">{fmt(r.equityLocked)}</td>
-                <td className="num">{r.cashYield ? pct(r.cashYield) : "—"}</td>
-                <td className="num">{fmtM(r.nw10)}</td>
-                <td className="num">{pct(r.cagr)}</td>
-                <td className="num" style={{ color: r.beats >= 0 ? "var(--moss)" : "var(--red)", fontWeight: 700 }}>
-                  {signPct(r.beats)}
-                </td>
-              </tr>
-            ))}
+            {results.map((r) => {
+              const m = M(r);
+              return (
+                <tr key={r.key}>
+                  <td><b>{r.name}</b></td>
+                  <td className="num">{fmt(m.freshCash)}</td>
+                  <td className="num">{fmt(r.equityLocked)}</td>
+                  <td className="num">{r.cashYield ? pct(r.cashYield) : "—"}</td>
+                  <td className="num">{fmtM(m.nw10)}</td>
+                  <td className="num">{pct(m.cagr)}</td>
+                  <td className="num" style={{ color: m.beats >= 0 ? "var(--moss)" : "var(--red)", fontWeight: 700 }}>
+                    {signPct(m.beats)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        <small>{afterTax ? "After GST & income tax." : "Pre-tax."}</small>
+      </div>
+
+      {/* tax & GST */}
+      <div className="card">
+        <h3>GST &amp; income tax</h3>
+        <p className="note">Indicative NZ treatment from your Tax &amp; GST intake. Confirm with a tax adviser.</p>
+        <table style={{ marginTop: 10 }}>
+          <thead>
+            <tr>
+              <th>Strategy</th>
+              <th className="num">Dev profit tax</th>
+              <th className="num">Rental tax (yr 1)</th>
+              <th className="num">GST effect</th>
+              <th className="num">After-tax completion cash</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((r) => {
+              const t = taxByKey[r.key];
+              return (
+                <tr key={r.key}>
+                  <td><b>{r.name}</b></td>
+                  <td className="num">{fmt(-t.incomeTaxDev)}</td>
+                  <td className="num">{r.heldN > 0 ? fmt(-t.incomeTaxRentalYr1) : "—"}</td>
+                  <td className="num" style={{ color: t.gst.net >= 0 ? "var(--moss)" : "var(--red)" }}>{fmt(t.gst.net)}</td>
+                  <td className="num" style={{ fontWeight: 700 }}>{fmt(t.afterTaxNet1)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {taxByKey[wf.key]?.gst.warning && (
+          <div className="callout" style={{ background: "#fdf0e6", borderLeft: "3px solid var(--amber)" }}>
+            <b>GST flag:</b> {taxByKey[wf.key].gst.warning}
+          </div>
+        )}
+        <ul style={{ margin: "12px 0 0", paddingLeft: 18, fontSize: 12.5, color: "var(--muted)" }}>
+          {(taxByKey[wf.key]?.notes ?? []).map((n, i) => (
+            <li key={i} style={{ marginBottom: 3 }}>{n}</li>
+          ))}
+        </ul>
       </div>
 
       <div className="actions">
@@ -287,11 +359,21 @@ function Kpi({ l, v, s }: { l: string; v: string; s: string }) {
   );
 }
 
-function WealthChart({ results, deal, a }: { results: Result[]; deal: Deal; a: Assumptions }) {
+function WealthChart({
+  results,
+  deal,
+  a,
+  wealthOf,
+}: {
+  results: Result[];
+  deal: Deal;
+  a: Assumptions;
+  wealthOf: (r: Result) => number[];
+}) {
   const labels = Array.from({ length: a.horizon + 1 }, (_, t) => "Yr " + t);
   const datasets = results.map((r) => ({
     label: r.name,
-    data: r.wealth,
+    data: wealthOf(r),
     borderColor: PALETTE[r.key] ?? "#48773C",
     backgroundColor: "transparent",
     tension: 0.2,

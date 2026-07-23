@@ -1,29 +1,41 @@
 import { useMemo, useState } from "react";
 import type { Assumptions, Deal } from "./engine";
-import { CLEVEDON_DEAL, DEFAULT_ASSUMPTIONS } from "./defaults";
+import type { SalesChannel, SellDown, WhoBuilds } from "./defaults";
+import { CLEVEDON_DEAL, DEFAULT_ASSUMPTIONS, withSalesChannel } from "./defaults";
+import type { TaxInputs } from "./tax";
+import { DEFAULT_TAX } from "./tax";
+import { UploadStep } from "./steps/UploadStep";
 import { OptionsStep } from "./steps/OptionsStep";
 import { AnalysisStep } from "./steps/AnalysisStep";
 
 const STEPS = ["Upload", "Confirm & explore", "Options & finance", "Capital analysis"];
 
+export interface Intake {
+  salesChannel: SalesChannel;
+  sellDown: SellDown;
+  whoBuilds: WhoBuilds;
+}
+
 export function App() {
-  const [step, setStep] = useState(2); // Steps 1–2 need the extraction/chat backend; start on Options
-  const [deal] = useState<Deal>(CLEVEDON_DEAL);
+  const [step, setStep] = useState(0);
+  const [deal, setDeal] = useState<Deal>(CLEVEDON_DEAL);
   const [assumptions, setAssumptions] = useState<Assumptions>(DEFAULT_ASSUMPTIONS);
+  const [tax, setTax] = useState<TaxInputs>(DEFAULT_TAX);
+  const [intake, setIntake] = useState<Intake>({ salesChannel: "private", sellDown: "atonce", whoBuilds: "contractor" });
   const [keepN, setKeepN] = useState(2);
   const [selected, setSelected] = useState<Record<string, boolean>>({ A: true, B: false, C: true, D: false });
 
   const patch = (p: Partial<Assumptions>) => setAssumptions((a) => ({ ...a, ...p }));
+  const patchTax = (p: Partial<TaxInputs>) => setTax((t) => ({ ...t, ...p }));
+  const patchIntake = (p: Partial<Intake>) => setIntake((i) => ({ ...i, ...p }));
+
+  // The deal actually fed to the engine reflects the chosen sales channel.
+  const effectiveDeal = useMemo(() => withSalesChannel(deal, intake.salesChannel), [deal, intake.salesChannel]);
 
   const go = (s: number) => {
     setStep(s);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-
-  const dealSummary = useMemo(
-    () => `${deal.lots}-lot subdivision · ${deal.address}`,
-    [deal],
-  );
 
   return (
     <>
@@ -51,13 +63,21 @@ export function App() {
       </nav>
 
       <main className="wrap">
-        {step < 2 && <ComingSoon step={step} dealSummary={dealSummary} onSkip={() => go(2)} />}
+        {step === 0 && <UploadStep deal={deal} setDeal={setDeal} onNext={() => go(2)} />}
+
+        {step === 1 && (
+          <ComingSoon dealAddress={deal.address} lots={deal.lots} onSkip={() => go(2)} />
+        )}
 
         {step === 2 && (
           <OptionsStep
             deal={deal}
             assumptions={assumptions}
             patch={patch}
+            tax={tax}
+            patchTax={patchTax}
+            intake={intake}
+            patchIntake={patchIntake}
             keepN={keepN}
             setKeepN={setKeepN}
             selected={selected}
@@ -68,8 +88,9 @@ export function App() {
 
         {step === 3 && (
           <AnalysisStep
-            deal={deal}
+            deal={effectiveDeal}
             assumptions={assumptions}
+            tax={tax}
             keepN={keepN}
             selected={selected}
             onBack={() => go(2)}
@@ -79,30 +100,25 @@ export function App() {
         <div className="foot">
           <b>Groundwork</b> — McKenzie &amp; Co. · Developing great places and people
           <br />
-          Before-tax, interest-only model. Hold-option returns are indicative until the tax layer lands.
+          GST &amp; income-tax estimates are indicative — confirm with a tax adviser before deciding.
         </div>
       </main>
     </>
   );
 }
 
-function ComingSoon({ step, dealSummary, onSkip }: { step: number; dealSummary: string; onSkip: () => void }) {
-  const isUpload = step === 0;
+function ComingSoon({ dealAddress, lots, onSkip }: { dealAddress: string; lots: number; onSkip: () => void }) {
   return (
     <>
-      <h2 className="sc-title">{isUpload ? "Upload" : "Confirm & explore"}</h2>
+      <h2 className="sc-title">Confirm &amp; explore</h2>
       <p className="sc-sub">
-        {isUpload
-          ? "Drop in the market valuation and the subdivision scheme plan. Groundwork reads them and drafts the deal for you to confirm."
-          : "A short consultative chat verifies the deal and draws out the owner's real options and money-side inputs."}
+        A short consultative chat verifies the deal and draws out the owner&rsquo;s real options and money-side inputs.
       </p>
       <div className="placeholder">
-        <p style={{ margin: 0, fontWeight: 600 }}>
-          {isUpload ? "PDF extraction pipeline" : "Discovery chat"} — coming next.
-        </p>
+        <p style={{ margin: 0, fontWeight: 600 }}>Discovery chat — coming next.</p>
         <p style={{ margin: "8px 0 0" }}>
-          This step needs the Azure Function + LLM back end. For now the model is pre-loaded with the
-          Clevedon deal: <b>{dealSummary}</b>.
+          For now, jump to Options &amp; finance — the intake questions (GST, tax, sales channel) live there.
+          Loaded deal: <b>{lots}-lot subdivision · {dealAddress}</b>.
         </p>
         <div style={{ marginTop: 18 }}>
           <button className="btn" onClick={onSkip}>

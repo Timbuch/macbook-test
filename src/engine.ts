@@ -65,6 +65,8 @@ export interface Result {
   name: string;
   heldN: number;
   soldN: number;
+  oneLine: boolean;               // sold the sold lots in one line?
+  sectionNet: number;             // ex-GST section proceeds after selling costs
   heldDebt: number;               // debt supportable on kept homes
   binding: "ICR" | "LVR" | "—";
   icr: number | null;             // achieved ICR at test rate
@@ -177,6 +179,8 @@ export function runOption(deal: Deal, a: Assumptions, cfg: OptionConfig): Result
     name: cfg.name,
     heldN,
     soldN,
+    oneLine: cfg.oneLine,
+    sectionNet,
     heldDebt,
     binding,
     icr,
