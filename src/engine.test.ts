@@ -7,7 +7,7 @@
  * Benchmark at 10% → $2,464,055 over 10 years.
  */
 import { describe, expect, it } from "vitest";
-import { benchmark, equityToday, projectReturn, runOption } from "./engine";
+import { benchmark, equityToday, financeStructure, projectReturn, runOption, sensitivity } from "./engine";
 import { CLEVEDON_DEAL, DEFAULT_ASSUMPTIONS, optionSet } from "./defaults";
 
 const deal = CLEVEDON_DEAL;
@@ -122,5 +122,37 @@ describe("project return (development margin)", () => {
     near(p.profit, 1_176_527);
     near(p.marginOnCost, 0.3417, 0.001);
     near(p.cashOnCash, 1.1765, 0.001); // leveraged: profit ÷ $1.0M land equity
+  });
+  it("realised + unrealised profit sum to total profit", () => {
+    for (const key of ["A", "C", "D"]) {
+      const r = byKey(2)[key];
+      const p = projectReturn(deal, a, r);
+      near(p.realisedProfit + p.unrealisedProfit, p.profit, 1);
+    }
+  });
+  it("Sell all is fully realised; keep options carry unrealised value", () => {
+    expect(projectReturn(deal, a, byKey().A).unrealisedProfit).toBe(0);
+    expect(projectReturn(deal, a, byKey(2).C).unrealisedProfit).toBeGreaterThan(0);
+  });
+});
+
+describe("finance structure (sources & uses)", () => {
+  it("sources balance uses; debt metrics computed", () => {
+    const f = financeStructure(deal, a, byKey(2).C);
+    near(f.sources.total, f.uses.total, 1);
+    expect(f.peakDebt).toBe(a.mortgage + (deal.civilCost + a.build * 2)); // mortgage + dev loan
+    expect(f.lvrOnGdv).toBeGreaterThan(0);
+    expect(f.lvrOnGdv).toBeLessThan(1);
+    expect(f.loanToCost).toBeGreaterThan(0);
+  });
+});
+
+describe("sensitivity", () => {
+  it("downside cases reduce profit; break-even is the GDV margin", () => {
+    const s = sensitivity(deal, a, optionSet().find((o) => o.key === "A")!);
+    expect(s.priceDown10).toBeLessThan(s.base);
+    expect(s.costUp10).toBeLessThan(s.base);
+    expect(s.rateUp2).toBeLessThan(s.base);
+    near(s.breakEvenPriceDrop, projectReturn(deal, a, byKey().A).marginOnGdv, 0.0001);
   });
 });

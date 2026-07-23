@@ -256,8 +256,10 @@ export interface ProjectReturn {
   devCost: number;       // civil + build + development finance interest
   tdc: number;           // total development cost = landIn + devCost
   profit: number;        // gdv − tdc
+  realisedProfit: number;   // profit from the sold sections (cash)
+  unrealisedProfit: number; // profit tied up in retained homes (mark-to-market, not cash)
   marginOnCost: number;  // profit / tdc
-  marginOnGdv: number;   // profit / gdv
+  marginOnGdv: number;   // profit / gdv  (= how far sales can fall before break-even)
   equityInvested: number; // developer's committed cash: land equity + any fresh cash in
   cashOnCash: number | null; // profit / equityInvested (leveraged return on cash)
 }
@@ -265,7 +267,7 @@ export interface ProjectReturn {
 export function projectReturn(deal: Deal, a: Assumptions, r: Result): ProjectReturn {
   // Holding the raw site is not a development — there's no project margin.
   if (r.holdAsIs) {
-    return { gdv: 0, landIn: deal.asIsValue, devCost: 0, tdc: 0, profit: 0, marginOnCost: 0, marginOnGdv: 0, equityInvested: 0, cashOnCash: null };
+    return { gdv: 0, landIn: deal.asIsValue, devCost: 0, tdc: 0, profit: 0, realisedProfit: 0, unrealisedProfit: 0, marginOnCost: 0, marginOnGdv: 0, equityInvested: 0, cashOnCash: null };
   }
   const landIn = deal.asIsValue;
   const buildCost = a.build * r.heldN;
@@ -275,17 +277,91 @@ export function projectReturn(deal: Deal, a: Assumptions, r: Result): ProjectRet
   const tdc = landIn + devCost;
   const profit = gdv - tdc;
   const equityInvested = Math.max(0, deal.asIsValue - a.mortgage) + r.freshCash;
+  // Split profit into realised (from the sold sections, cash) and unrealised
+  // (created in the retained homes — mark-to-market, not cash until sold).
+  const soldShare = deal.lots > 0 ? r.soldN / deal.lots : 0;
+  const heldShare = deal.lots > 0 ? r.heldN / deal.lots : 0;
+  const sharedCost = landIn + deal.civilCost + r.devInterest;
+  const realisedProfit = r.sectionNet - soldShare * sharedCost;
+  const unrealisedProfit = heldValue - buildCost - heldShare * sharedCost;
   return {
     gdv,
     landIn,
     devCost,
     tdc,
     profit,
+    realisedProfit,
+    unrealisedProfit,
     marginOnCost: tdc > 0 ? profit / tdc : 0,
     marginOnGdv: gdv > 0 ? profit / gdv : 0,
     equityInvested,
     cashOnCash: equityInvested > 0 ? profit / equityInvested : null,
   };
+}
+
+/**
+ * Development funding structure — the sources & uses and debt metrics a lender
+ * looks at. Peak debt = existing mortgage + development loan drawn to fund the
+ * works. Uses are the total development cost (land at market, civil, build,
+ * finance interest); funded by owner equity + those debts.
+ */
+export interface FinanceStructure {
+  uses: { land: number; civil: number; build: number; devInterest: number; total: number };
+  sources: { equity: number; devLoan: number; mortgage: number; total: number };
+  peakDebt: number;
+  gdv: number;
+  lvrOnGdv: number;     // peak debt / gross development value
+  loanToCost: number;   // peak debt / total development cost
+  equityShare: number;  // owner equity / total development cost
+  icr: number | null;   // interest cover on retained homes at the test rate (if any held)
+}
+
+export function financeStructure(deal: Deal, a: Assumptions, r: Result): FinanceStructure {
+  const build = a.build * r.heldN;
+  const land = deal.asIsValue;
+  const devInterest = r.devInterest;
+  const total = land + deal.civilCost + build + devInterest;
+  const devLoan = a.devFund === "debt" ? deal.civilCost + build : 0;
+  const mortgage = a.mortgage;
+  const peakDebt = mortgage + devLoan;
+  const equity = Math.max(0, total - devLoan - mortgage);
+  const gdv = r.sectionNet + a.homeVal * r.heldN;
+  return {
+    uses: { land, civil: deal.civilCost, build, devInterest, total },
+    sources: { equity, devLoan, mortgage, total: equity + devLoan + mortgage },
+    peakDebt,
+    gdv,
+    lvrOnGdv: gdv > 0 ? peakDebt / gdv : 0,
+    loanToCost: total > 0 ? peakDebt / total : 0,
+    equityShare: total > 0 ? equity / total : 0,
+    icr: r.icr,
+  };
+}
+
+/**
+ * Downside sensitivity of the development margin: sale prices −10%, costs +10%,
+ * finance rate +2%. `breakEvenPriceDrop` is how far sales can fall before profit
+ * hits zero (= margin on GDV). Pre-tax development profit.
+ */
+export interface Sensitivity {
+  base: number;
+  priceDown10: number;
+  costUp10: number;
+  rateUp2: number;
+  breakEvenPriceDrop: number;
+}
+
+export function sensitivity(deal: Deal, a: Assumptions, cfg: OptionConfig): Sensitivity {
+  const p = (d: Deal, aa: Assumptions) => projectReturn(d, aa, runOption(d, aa, cfg)).profit;
+  const base = p(deal, a);
+  const priceDown10 = p(
+    { ...deal, grossRealisationInclGST: deal.grossRealisationInclGST * 0.9, saleInOneLineInclGST: deal.saleInOneLineInclGST * 0.9 },
+    a,
+  );
+  const costUp10 = p({ ...deal, civilCost: deal.civilCost * 1.1 }, { ...a, build: a.build * 1.1 });
+  const rateUp2 = p(deal, { ...a, devRate: a.devRate + 0.02, intRate: a.intRate + 0.02 });
+  const gdv = projectReturn(deal, a, runOption(deal, a, cfg)).gdv;
+  return { base, priceDown10, costUp10, rateUp2, breakEvenPriceDrop: gdv > 0 ? base / gdv : 0 };
 }
 
 /** Opportunity-cost benchmark line: equity today compounded at the hurdle. */

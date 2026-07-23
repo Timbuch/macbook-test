@@ -13,7 +13,7 @@ import {
 } from "chart.js";
 import { Chart } from "react-chartjs-2";
 import type { Assumptions, Deal, ProjectReturn, Result } from "../engine";
-import { equityToday, projectReturn, runOption } from "../engine";
+import { equityToday, financeStructure, projectReturn, runOption, sensitivity } from "../engine";
 import type { BenchmarkType } from "../defaults";
 import { BENCHMARKS, optionSet } from "../defaults";
 import type { TaxInputs, TaxResult } from "../tax";
@@ -70,7 +70,6 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
   // The benchmark: sell now and grow the freed-up equity at the chosen rate.
   const benchSeries = Array.from({ length: a.horizon + 1 }, (_, t) => eq0 * Math.pow(1 + a.hurdle, t));
   const bench = benchSeries[a.horizon];
-  const benchRoi = eq0 > 0 ? (bench - eq0) / eq0 : 0; // ROI on today's equity, comparable to strategies
   const benchName = BENCHMARKS[benchmarkType].short;
   const showAfterTax = afterTax && gstOk;
 
@@ -79,10 +78,9 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
   // next best option, which grows that same equity at its rate).
   const M = (r: Result) => {
     const t = taxByKey[r.key];
-    const base = showAfterTax
+    return showAfterTax
       ? { nw10: t.afterTaxNw10, cagr: t.afterTaxCagr, freshCash: t.afterTaxFreshCash, net1: t.afterTaxNet1, wealth: t.afterTaxWealth }
       : { nw10: r.nw10, cagr: r.cagr, freshCash: r.freshCash, net1: r.net1, wealth: r.wealth };
-    return { ...base, roi: eq0 > 0 ? (base.nw10 - eq0) / eq0 : 0 };
   };
 
   const bestWealth = [...results].sort((x, y) => M(y).nw10 - M(x).nw10)[0];
@@ -99,16 +97,23 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
     const p = prByKey[r.key];
     if (r.holdAsIs || !showAfterTax) return p;
     const t = taxByKey[r.key];
-    const profit = p.profit - t.incomeTaxDev + t.gst.net;
+    // Income tax + GST hit the realised (sold) profit; retained value isn't taxed
+    // until sold (no CGT here). So the split stays consistent with total profit.
+    const realisedProfit = p.realisedProfit - t.incomeTaxDev + t.gst.net;
+    const profit = realisedProfit + p.unrealisedProfit;
     return {
       ...p,
       profit,
+      realisedProfit,
       marginOnCost: p.tdc > 0 ? profit / p.tdc : 0,
       marginOnGdv: p.gdv > 0 ? profit / p.gdv : 0,
       cashOnCash: p.equityInvested > 0 ? profit / p.equityInvested : null,
     };
   };
   const prBest = prView(bestWealth);
+  const fsBest = financeStructure(deal, a, bestWealth);
+  const bestCfg = optionSet(keepN).find((o) => o.key === bestWealth.key)!;
+  const sens = bestWealth.holdAsIs ? null : sensitivity(deal, a, bestCfg);
 
   return (
     <>
@@ -145,9 +150,9 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
         <span className="tag">Read on the numbers</span>
         <br />
         Equity today is about <b>{fmtM(eq0)}</b> (the ~{fmtM(deal.asIsValue)} land less the {fmtM(a.mortgage)} mortgage).
-        Your baseline — <b>{benchName}</b> ({pct(a.hurdle)} p.a.) — turns that into <b>{fmtM(bench)}</b> over {a.horizon} years
-        ({pct(benchRoi)} ROI). That&rsquo;s the bar each strategy must beat.{" "}
-        <b>{bestWealth.name}</b> builds the most wealth ({fmtM(mBest.nw10)}, {pct(mBest.roi)} ROI) but ties up{" "}
+        Your baseline — <b>{benchName}</b> ({pct(a.hurdle)} p.a.) — turns that into <b>{fmtM(bench)}</b> over {a.horizon} years.
+        That&rsquo;s the bar each strategy must beat.{" "}
+        <b>{bestWealth.name}</b> builds the most net worth ({fmtM(mBest.nw10)}, {pct(mBest.cagr)} p.a.) but ties up{" "}
         <b>{fmtM(mBest.freshCash + bestWealth.equityLocked)}</b> of cash
         {bestWealth.cashYield ? ` at a ${pct2(bestWealth.cashYield)} cash yield` : ""}.{" "}
         <b>{leanest.name}</b> keeps the owner most liquid.
@@ -160,20 +165,20 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
         )}
       </div>
 
-      {/* KPI row — leads with the development return for the best-wealth strategy */}
+      {/* KPI row — development-period returns then the long-run hold, periods labelled */}
       <div className="grid4" style={{ marginTop: 18 }}>
         <Kpi
-          l="Development profit"
+          l={`Development profit · ${bestWealth.name}`}
           v={prBest.profit ? fmt(prBest.profit) : "—"}
-          s={prBest.profit ? pct(prBest.marginOnCost) + " margin on cost" : bestWealth.name}
+          s={prBest.profit ? pct(prBest.marginOnCost) + " margin on cost" : "no development"}
         />
         <Kpi
-          l="Cash-on-cash return"
+          l="Cash-on-cash · dev period"
           v={prBest.cashOnCash != null ? pct(prBest.cashOnCash) : "—"}
-          s="on cash committed"
+          s={`on cash committed, over ~${a.devMonths} mths`}
         />
-        <Kpi l="Fresh cash needed" v={fmt(mBest.freshCash)} s={bestWealth.name} />
-        <Kpi l={`Net wealth · yr ${a.horizon}`} v={fmtM(mBest.nw10)} s={pct(mBest.roi) + " ROI · " + pct(mBest.cagr) + " p.a."} />
+        <Kpi l="Fresh cash needed" v={fmt(mBest.freshCash)} s="owner cash to inject" />
+        <Kpi l={`Net worth · yr ${a.horizon}`} v={fmtM(mBest.nw10)} s={pct(mBest.cagr) + " p.a. (annualised)"} />
       </div>
 
       {/* project return (development margin) */}
@@ -190,7 +195,9 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
               <th>Strategy</th>
               <th className="num">End value</th>
               <th className="num">Total cost</th>
-              <th className="num">Profit</th>
+              <th className="num">Profit — realised</th>
+              <th className="num">+ retained (unrealised)</th>
+              <th className="num">Total profit</th>
               <th className="num">Margin on cost</th>
               <th className="num">Cash-on-cash</th>
             </tr>
@@ -202,7 +209,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
                 return (
                   <tr key={r.key}>
                     <td><b>{r.name}</b></td>
-                    <td className="num" colSpan={5} style={{ color: "var(--muted)" }}>no development — pure capital growth (see net wealth below)</td>
+                    <td className="num" colSpan={7} style={{ color: "var(--muted)" }}>no development — pure capital growth (see net worth below)</td>
                   </tr>
                 );
               }
@@ -211,6 +218,8 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
                   <td><b>{r.name}</b></td>
                   <td className="num">{fmtM(p.gdv)}</td>
                   <td className="num">{fmtM(p.tdc)}</td>
+                  <td className="num">{fmt(p.realisedProfit)}</td>
+                  <td className="num" style={{ color: "var(--muted)" }}>{p.unrealisedProfit ? fmt(p.unrealisedProfit) : "—"}</td>
                   <td className="num" style={{ fontWeight: 700, color: p.profit >= 0 ? "var(--moss)" : "var(--red)" }}>{fmt(p.profit)}</td>
                   <td className="num">{pct(p.marginOnCost)}</td>
                   <td className="num" style={{ fontWeight: 700 }}>{p.cashOnCash != null ? pct(p.cashOnCash) : "—"}</td>
@@ -219,7 +228,90 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
             })}
           </tbody>
         </table>
+        <small>Realised = cash from the sold sections. Retained = value created in kept homes (mark-to-market, not cash until sold).</small>
       </div>
+
+      {/* funding structure — sources & uses + debt metrics */}
+      <div className="card">
+        <h3>Funding structure — {bestWealth.name}</h3>
+        <p className="note">Sources &amp; uses to complete the development, and the debt metrics a lender assesses.</p>
+        <div className="grid2" style={{ marginTop: 10 }}>
+          <table>
+            <thead><tr><th>Uses (to complete)</th><th className="num">$</th></tr></thead>
+            <tbody>
+              <tr><td>Land (at market)</td><td className="num">{fmt(fsBest.uses.land)}</td></tr>
+              <tr><td>Civil / development works</td><td className="num">{fmt(fsBest.uses.civil)}</td></tr>
+              {fsBest.uses.build > 0 && <tr><td>Build ({bestWealth.heldN} homes)</td><td className="num">{fmt(fsBest.uses.build)}</td></tr>}
+              <tr><td>Development finance interest</td><td className="num">{fmt(fsBest.uses.devInterest)}</td></tr>
+              <tr className="total"><td>Total development cost</td><td className="num">{fmt(fsBest.uses.total)}</td></tr>
+            </tbody>
+          </table>
+          <table>
+            <thead><tr><th>Funded by</th><th className="num">$</th></tr></thead>
+            <tbody>
+              <tr><td>Owner equity</td><td className="num">{fmt(fsBest.sources.equity)}</td></tr>
+              <tr><td>Development loan</td><td className="num">{fmt(fsBest.sources.devLoan)}</td></tr>
+              <tr><td>Existing mortgage</td><td className="num">{fmt(fsBest.sources.mortgage)}</td></tr>
+              <tr className="total"><td>Total sources</td><td className="num">{fmt(fsBest.sources.total)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <table style={{ marginTop: 14 }}>
+          <thead>
+            <tr>
+              <th>Strategy</th>
+              <th className="num">Peak debt</th>
+              <th className="num">LVR on GDV</th>
+              <th className="num">Loan-to-cost</th>
+              <th className="num">Equity share</th>
+              <th className="num">ICR</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.filter((r) => !r.holdAsIs).map((r) => {
+              const f = financeStructure(deal, a, r);
+              return (
+                <tr key={r.key}>
+                  <td><b>{r.name}</b></td>
+                  <td className="num">{fmt(f.peakDebt)}</td>
+                  <td className="num">{pct(f.lvrOnGdv)}</td>
+                  <td className="num">{pct(f.loanToCost)}</td>
+                  <td className="num">{pct(f.equityShare)}</td>
+                  <td className="num">{f.icr != null ? f.icr.toFixed(2) + "×" : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <small>Peak debt = existing mortgage + development loan during works. LVR on gross development value; loan-to-cost on total development cost.</small>
+      </div>
+
+      {/* sensitivity — downside on the development margin */}
+      {sens && (
+        <div className="card">
+          <h3>Sensitivity &amp; break-even — {bestWealth.name}</h3>
+          <p className="note">How the development profit holds up under downside moves (pre-tax). The headline test any lender runs.</p>
+          <table style={{ marginTop: 10 }}>
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th className="num">Development profit</th>
+                <th className="num">vs base</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Base case</td><td className="num" style={{ fontWeight: 700 }}>{fmt(sens.base)}</td><td className="num">—</td></tr>
+              <tr><td>Sale prices −10%</td><td className="num" style={{ color: sens.priceDown10 < 0 ? "var(--red)" : undefined }}>{fmt(sens.priceDown10)}</td><td className="num neg">{fmt(sens.priceDown10 - sens.base)}</td></tr>
+              <tr><td>Build &amp; civil costs +10%</td><td className="num" style={{ color: sens.costUp10 < 0 ? "var(--red)" : undefined }}>{fmt(sens.costUp10)}</td><td className="num neg">{fmt(sens.costUp10 - sens.base)}</td></tr>
+              <tr><td>Finance rate +2%</td><td className="num">{fmt(sens.rateUp2)}</td><td className="num neg">{fmt(sens.rateUp2 - sens.base)}</td></tr>
+            </tbody>
+          </table>
+          <div className="callout water" style={{ marginTop: 12 }}>
+            <b>Break-even:</b> sale prices can fall <b>{pct(sens.breakEvenPriceDrop)}</b> before the development breaks even.
+            {sens.priceDown10 < 0 && " A 10% fall already wipes out the margin — thin cover."}
+          </div>
+        </div>
+      )}
 
       {/* 10-year net wealth (full width) */}
       <div className="card">
@@ -358,9 +450,8 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
               <th className="num">Fresh cash</th>
               <th className="num">Equity locked</th>
               <th className="num">Yr-1 yield</th>
-              <th className="num">Net wealth yr {a.horizon}</th>
-              <th className="num">CAGR</th>
-              <th className="num">{a.horizon}-yr ROI</th>
+              <th className="num">Net worth yr {a.horizon}</th>
+              <th className="num">Return p.a.</th>
             </tr>
           </thead>
           <tbody>
@@ -373,9 +464,8 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
                   <td className="num">{fmt(r.equityLocked)}</td>
                   <td className="num">{r.cashYield ? pct2(r.cashYield) : "—"}</td>
                   <td className="num">{fmtM(m.nw10)}</td>
-                  <td className="num">{pct(m.cagr)}</td>
-                  <td className="num" style={{ color: m.roi >= benchRoi ? "var(--moss)" : "var(--red)", fontWeight: 700 }}>
-                    {pct(m.roi)}
+                  <td className="num" style={{ color: m.cagr >= a.hurdle ? "var(--moss)" : "var(--red)", fontWeight: 700 }}>
+                    {pct(m.cagr)}
                   </td>
                 </tr>
               );
@@ -390,12 +480,11 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
               <td className="num">—</td>
               <td className="num">—</td>
               <td className="num">{fmtM(bench)}</td>
-              <td className="num">{pct(a.hurdle)}</td>
-              <td className="num" style={{ fontWeight: 700 }}>{pct(benchRoi)}</td>
+              <td className="num" style={{ fontWeight: 700 }}>{pct(a.hurdle)}</td>
             </tr>
           </tbody>
         </table>
-        <small>{showAfterTax ? "After GST & income tax." : "Pre-tax."} ROI = total return over {a.horizon} years on today&rsquo;s equity.</small>
+        <small>{showAfterTax ? "After GST & income tax." : "Pre-tax."} Return p.a. is the annualised equity return (CAGR) over {a.horizon} years.</small>
       </div>
 
       {/* tax & GST */}
