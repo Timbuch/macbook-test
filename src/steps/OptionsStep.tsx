@@ -168,7 +168,8 @@ export function OptionsStep(props: Props) {
         <div className="card" style={{ borderColor: gstDone ? undefined : "var(--amber)" }}>
           <h3>Tax &amp; GST</h3>
           <p className="note">
-            GST treatment is <b>specific to each project</b> — it isn&rsquo;t carried over, so confirm it below every time.
+            Defaults to the common case (GST-registered). GST treatment is <b>specific to each project</b>, so confirm it
+            below every time — it drives the after-tax numbers shown by default.
           </p>
           <div className="field" style={{ marginTop: 10 }}>
             <label>Income tax rate / entity</label>

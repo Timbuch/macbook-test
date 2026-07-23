@@ -60,11 +60,14 @@ export interface TaxIntake {
   heldGst: "" | TaxInputs["heldGst"];
 }
 
+// Defaults to the realistic common case so the tool shows real, tax-inclusive
+// numbers out of the box (a subdivision at this scale is normally GST-registered).
+// Still confirmed per project on the options step — these are a starting point.
 export const DEFAULT_TAX_INTAKE: TaxIntake = {
   incomeTaxRate: 0.28,
-  gstRegistered: "",
-  purchaseGst: "",
-  heldGst: "",
+  gstRegistered: "yes",
+  purchaseGst: "zero-rated",
+  heldGst: "exempt",
 };
 
 /** True once every GST question has been answered for this project. */

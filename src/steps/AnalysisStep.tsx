@@ -54,7 +54,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
     return m;
   }, [results, deal, a]);
   const [wfIdx, setWfIdx] = useState(0);
-  const [afterTax, setAfterTax] = useState(false);
+  const [afterTax, setAfterTax] = useState(true); // tax is real — show the after-tax picture by default
 
   if (!results.length) {
     return (
@@ -92,7 +92,23 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
   const icrBind = results.some((r) => r.binding === "ICR");
   const wf = results[Math.min(wfIdx, results.length - 1)];
   const mBest = M(bestWealth);
-  const prBest = prByKey[bestWealth.key];
+
+  // Project return, tax-adjusted when the after-tax view is on: profit less the
+  // development-profit income tax and the GST effect (same basis as completion cash).
+  const prView = (r: Result) => {
+    const p = prByKey[r.key];
+    if (r.holdAsIs || !showAfterTax) return p;
+    const t = taxByKey[r.key];
+    const profit = p.profit - t.incomeTaxDev + t.gst.net;
+    return {
+      ...p,
+      profit,
+      marginOnCost: p.tdc > 0 ? profit / p.tdc : 0,
+      marginOnGdv: p.gdv > 0 ? profit / p.gdv : 0,
+      cashOnCash: p.equityInvested > 0 ? profit / p.equityInvested : null,
+    };
+  };
+  const prBest = prView(bestWealth);
 
   return (
     <>
@@ -165,7 +181,8 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
         <h3>Project return (development margin)</h3>
         <p className="note">
           What the subdivision itself earns: end value less all costs, with land in at its current market value.
-          Cash-on-cash = profit ÷ the cash actually committed (land equity + any fresh cash). Pre-tax, net of GST.
+          Cash-on-cash = profit ÷ the cash actually committed (land equity + any fresh cash).{" "}
+          {showAfterTax ? "After income tax & GST." : "Pre-tax, net of GST."}
         </p>
         <table style={{ marginTop: 10 }}>
           <thead>
@@ -180,7 +197,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
           </thead>
           <tbody>
             {results.map((r) => {
-              const p = prByKey[r.key];
+              const p = prView(r);
               if (r.holdAsIs) {
                 return (
                   <tr key={r.key}>
