@@ -7,7 +7,7 @@
  * Benchmark at 10% → $2,464,055 over 10 years.
  */
 import { describe, expect, it } from "vitest";
-import { benchmark, equityToday, runOption } from "./engine";
+import { benchmark, equityToday, projectReturn, runOption } from "./engine";
 import { CLEVEDON_DEAL, DEFAULT_ASSUMPTIONS, optionSet } from "./defaults";
 
 const deal = CLEVEDON_DEAL;
@@ -17,6 +17,8 @@ const a = DEFAULT_ASSUMPTIONS;
 const round = (n: number) => Math.round(n);
 /** Percentage to one decimal place, matching the spec table (e.g. 18.4%). */
 const pct1 = (n: number) => +(n * 100).toFixed(1);
+/** Assert x within tol of y (default $1). */
+const near = (x: number | null, y: number, tol = 1) => expect(Math.abs((x ?? NaN) - y)).toBeLessThanOrEqual(tol);
 
 const byKey = (keepN = 2) => {
   const map: Record<string, ReturnType<typeof runOption>> = {};
@@ -91,8 +93,34 @@ describe("§9 worked example", () => {
     expect(pct1(r.cagr)).toBe(20.7);
   });
 
-  it("every option beats the 10% hurdle", () => {
-    const rs = Object.values(byKey());
+  it("every development option beats the 10% hurdle", () => {
+    const rs = Object.values(byKey()).filter((r) => !r.holdAsIs);
     for (const r of rs) expect(r.beats).toBeGreaterThan(0);
+  });
+});
+
+describe("hold-as-is option", () => {
+  const E = runOption(deal, a, optionSet().find((o) => o.key === "E")!);
+  it("no development: raw site appreciates at capG, net of mortgage", () => {
+    expect(E.holdAsIs).toBe(true);
+    expect(E.heldDebt).toBe(0);
+    expect(E.net1).toBe(0);
+    // yr10 = asIsValue × (1+capG)^10 − mortgage
+    expect(round(E.nw10)).toBe(round(deal.asIsValue * Math.pow(1 + a.capG, a.horizon) - a.mortgage));
+    expect(E.wealth[0]).toBe(round(equityToday(deal, a))); // starts at equity today (integer here)
+  });
+  it("has no development margin", () => {
+    const p = projectReturn(deal, a, E);
+    expect(p.profit).toBe(0);
+    expect(p.cashOnCash).toBeNull();
+  });
+});
+
+describe("project return (development margin)", () => {
+  it("A · Sell all 8 — margin and cash-on-cash", () => {
+    const p = projectReturn(deal, a, byKey().A);
+    near(p.profit, 1_176_527);
+    near(p.marginOnCost, 0.3417, 0.001);
+    near(p.cashOnCash, 1.1765, 0.001); // leveraged: profit ÷ $1.0M land equity
   });
 });

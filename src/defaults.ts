@@ -57,10 +57,16 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
 
 export type BenchmarkType = "fund" | "mortgage" | "termdeposit" | "custom";
 
-export const BENCHMARKS: Record<BenchmarkType, { label: string; short: string; rate: number | null; blurb: string }> = {
-  fund: { label: "A property / managed fund", short: "a property fund", rate: 0.10, blurb: "Typical ~10% p.a." },
-  mortgage: { label: "Paying down the mortgage", short: "paying down the mortgage", rate: null, blurb: "Guaranteed return = your mortgage rate." },
-  termdeposit: { label: "A term deposit", short: "a term deposit", rate: 0.04, blurb: "Safe ~4% p.a." },
+// The "next best use of the freed-up cash" — the opportunity cost of the money
+// if the site is sold and not developed. (Holding the raw land is a strategy
+// option in its own right, not a benchmark.)
+export const BENCHMARKS: Record<
+  BenchmarkType,
+  { label: string; short: string; rate: number | null; blurb: string }
+> = {
+  fund: { label: "Property / managed fund", short: "a property fund", rate: 0.10, blurb: "~10% p.a. on the freed-up cash." },
+  mortgage: { label: "Pay down the mortgage", short: "paying down the mortgage", rate: null, blurb: "Guaranteed return = your mortgage rate." },
+  termdeposit: { label: "Term deposit", short: "a term deposit", rate: 0.04, blurb: "Safe ~4% p.a. on the freed-up cash." },
   custom: { label: "Something else (set the rate)", short: "your next best option", rate: null, blurb: "Enter the return you could otherwise earn." },
 };
 
@@ -91,5 +97,6 @@ export function optionSet(keepN = 2): OptionConfig[] {
     { key: "B", name: "Sell in one line", heldN: 0, oneLine: true },
     { key: "C", name: `Sell ${8 - keepN} · keep ${keepN}`, heldN: keepN, oneLine: false },
     { key: "D", name: "Keep all 8", heldN: 8, oneLine: false },
+    { key: "E", name: "Hold site as-is", heldN: 0, oneLine: false, holdAsIs: true },
   ];
 }

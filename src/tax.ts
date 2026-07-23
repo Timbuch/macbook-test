@@ -107,6 +107,24 @@ export interface TaxResult {
 const gstOn = (inclGST: number, gstRate: number): number => inclGST - inclGST / (1 + gstRate);
 
 export function applyTax(deal: Deal, a: Assumptions, r: Result, tax: TaxInputs): TaxResult {
+  // Holding the raw site triggers no taxable events (no sale, no rent, no GST)
+  // until it's later sold or developed. After-tax == pre-tax.
+  if (r.holdAsIs) {
+    return {
+      incomeTaxDev: 0,
+      devTaxableProfit: 0,
+      incomeTaxRentalYr1: 0,
+      afterTaxNet1: 0,
+      afterTaxFreshCash: 0,
+      afterTaxWealth: r.wealth,
+      afterTaxNw10: r.nw10,
+      afterTaxCagr: r.cagr,
+      afterTaxBeats: r.beats,
+      gst: { registered: tax.gstRegistered, outputOnSales: 0, inputReclaim: 0, heldBuildGstCost: 0, net: 0 },
+      notes: ["Holding the raw site — no sale, rent or GST events until it is sold or developed."],
+    };
+  }
+
   const g = deal.gstRate;
   const soldShare = deal.lots > 0 ? r.soldN / deal.lots : 0;
   const buildHeld = a.build * r.heldN;

@@ -27,6 +27,7 @@ const OPTION_BLURB: Record<string, string> = {
   B: "Sell the whole site in one line as a fallback — faster, lower price.",
   C: "Sell most, build & keep some as long-term rentals.",
   D: "Build and keep every home. Maximum hold, maximum cash tied up.",
+  E: "Don't develop — hold the raw site for the horizon, appreciating with the property market.",
 };
 
 export function OptionsStep(props: Props) {
@@ -219,8 +220,9 @@ export function OptionsStep(props: Props) {
       <div className="card">
         <h3>Your next best option</h3>
         <p className="note">
-          If the cash weren&rsquo;t in this project, where would it go? Groundwork grows your equity at that return and
-          compares every strategy against it — a strategy is only worth it if it beats where the money would otherwise sit.
+          If you freed up the cash, where would it go? Groundwork grows it at that return and compares every strategy
+          against it — so a strategy is only worth it if it beats parking the money there. (Holding the raw site is its own
+          option above.)
         </p>
         <div className="grid2" style={{ marginTop: 10 }}>
           <div className="field">

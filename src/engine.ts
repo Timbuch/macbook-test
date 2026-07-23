@@ -56,6 +56,7 @@ export interface OptionConfig {
   name: string;
   heldN: number;         // homes built & kept
   oneLine: boolean;      // sell the sold lots in one line?
+  holdAsIs?: boolean;    // don't develop at all — hold the raw site, appreciating at capG
 }
 
 export type WaterfallItem = [label: string, amount: number, sign: "pos" | "neg"];
@@ -66,6 +67,7 @@ export interface Result {
   heldN: number;
   soldN: number;
   oneLine: boolean;               // sold the sold lots in one line?
+  holdAsIs: boolean;              // no development — raw site held and appreciating
   sectionNet: number;             // ex-GST section proceeds after selling costs
   heldDebt: number;               // debt supportable on kept homes
   binding: "ICR" | "LVR" | "—";
@@ -97,6 +99,46 @@ export const equityToday = (deal: Deal, a: Assumptions): number =>
 // ─── Core ──────────────────────────────────────────────────────────────────
 
 export function runOption(deal: Deal, a: Assumptions, cfg: OptionConfig): Result {
+  const eq0Today = equityToday(deal, a);
+
+  // "Hold as-is": no subdivision, no sale, no build. The raw site is kept and
+  // rides the wider property market at the capital-growth rate, net of the
+  // mortgage. No income (mortgage interest assumed serviced from elsewhere).
+  if (cfg.holdAsIs) {
+    const wealth: number[] = [eq0Today];
+    for (let t = 1; t <= a.horizon; t++) {
+      wealth.push(deal.asIsValue * Math.pow(1 + a.capG, t) - a.mortgage);
+    }
+    const nw10 = wealth[wealth.length - 1];
+    const cagr = Math.pow(nw10 / Math.max(eq0Today, 1), 1 / a.horizon) - 1;
+    return {
+      key: cfg.key,
+      name: cfg.name,
+      heldN: 0,
+      soldN: 0,
+      oneLine: false,
+      holdAsIs: true,
+      sectionNet: 0,
+      heldDebt: 0,
+      binding: "—",
+      icr: null,
+      freshCash: 0,
+      equityLocked: eq0Today, // all equity stays illiquid in the raw land
+      cashYield: null,
+      netRent1: 0,
+      NOI1: 0,
+      devInterest: 0,
+      net1: 0,
+      wealth,
+      nw10,
+      cagr,
+      beats: cagr - a.hurdle,
+      topups: 0,
+      eq0: eq0Today,
+      items: [["No transaction — site held as-is", 0, "pos"]],
+    };
+  }
+
   const heldN = cfg.heldN;
   const soldN = deal.lots - heldN;
   const grossPerLot = deal.grossRealisationInclGST / deal.lots;
@@ -180,6 +222,7 @@ export function runOption(deal: Deal, a: Assumptions, cfg: OptionConfig): Result
     heldN,
     soldN,
     oneLine: cfg.oneLine,
+    holdAsIs: false,
     sectionNet,
     heldDebt,
     binding,
@@ -198,6 +241,50 @@ export function runOption(deal: Deal, a: Assumptions, cfg: OptionConfig): Result
     topups,
     eq0,
     items,
+  };
+}
+
+/**
+ * Development / project return — the classic feasibility view, distinct from the
+ * 10-year wealth trajectory. Land goes in at its current market value (as-is), so
+ * `profit` is the value the DEVELOPMENT creates over and above simply holding the
+ * land. Pre-tax, ex-GST (engine basis).
+ */
+export interface ProjectReturn {
+  gdv: number;           // gross development value: net sale proceeds + retained homes' value
+  landIn: number;        // land at current market (as-is) value
+  devCost: number;       // civil + build + development finance interest
+  tdc: number;           // total development cost = landIn + devCost
+  profit: number;        // gdv − tdc
+  marginOnCost: number;  // profit / tdc
+  marginOnGdv: number;   // profit / gdv
+  equityInvested: number; // developer's committed cash: land equity + any fresh cash in
+  cashOnCash: number | null; // profit / equityInvested (leveraged return on cash)
+}
+
+export function projectReturn(deal: Deal, a: Assumptions, r: Result): ProjectReturn {
+  // Holding the raw site is not a development — there's no project margin.
+  if (r.holdAsIs) {
+    return { gdv: 0, landIn: deal.asIsValue, devCost: 0, tdc: 0, profit: 0, marginOnCost: 0, marginOnGdv: 0, equityInvested: 0, cashOnCash: null };
+  }
+  const landIn = deal.asIsValue;
+  const buildCost = a.build * r.heldN;
+  const heldValue = a.homeVal * r.heldN;
+  const gdv = r.sectionNet + heldValue; // ex-GST net proceeds from sold lots + retained value
+  const devCost = deal.civilCost + buildCost + r.devInterest;
+  const tdc = landIn + devCost;
+  const profit = gdv - tdc;
+  const equityInvested = Math.max(0, deal.asIsValue - a.mortgage) + r.freshCash;
+  return {
+    gdv,
+    landIn,
+    devCost,
+    tdc,
+    profit,
+    marginOnCost: tdc > 0 ? profit / tdc : 0,
+    marginOnGdv: gdv > 0 ? profit / gdv : 0,
+    equityInvested,
+    cashOnCash: equityInvested > 0 ? profit / equityInvested : null,
   };
 }
 

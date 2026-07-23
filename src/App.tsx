@@ -24,7 +24,7 @@ export function App() {
   const [benchmarkType, setBenchmarkType] = useState<BenchmarkType>("fund");
   const [intake, setIntake] = useState<Intake>({ salesChannel: "private", sellDown: "atonce", whoBuilds: "contractor" });
   const [keepN, setKeepN] = useState(2);
-  const [selected, setSelected] = useState<Record<string, boolean>>({ A: true, B: false, C: true, D: false });
+  const [selected, setSelected] = useState<Record<string, boolean>>({ A: true, B: false, C: true, D: false, E: true });
 
   const patch = (p: Partial<Assumptions>) => setAssumptions((a) => ({ ...a, ...p }));
   const patchTax = (p: Partial<TaxIntake>) => setTaxIntake((t) => ({ ...t, ...p }));

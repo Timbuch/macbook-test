@@ -12,8 +12,8 @@ import {
   Tooltip,
 } from "chart.js";
 import { Chart } from "react-chartjs-2";
-import type { Assumptions, Deal, Result } from "../engine";
-import { benchmark, equityToday, runOption } from "../engine";
+import type { Assumptions, Deal, ProjectReturn, Result } from "../engine";
+import { equityToday, projectReturn, runOption } from "../engine";
 import type { BenchmarkType } from "../defaults";
 import { BENCHMARKS, optionSet } from "../defaults";
 import type { TaxInputs, TaxResult } from "../tax";
@@ -25,7 +25,7 @@ ChartJS.register(
   CategoryScale, LinearScale, Tooltip, Legend,
 );
 
-const PALETTE: Record<string, string> = { A: "#48773C", B: "#ABC6CA", C: "#3D3935", D: "#8FA96B" };
+const PALETTE: Record<string, string> = { A: "#48773C", B: "#ABC6CA", C: "#3D3935", D: "#8FA96B", E: "#c98a3c" };
 
 interface Props {
   deal: Deal;
@@ -48,6 +48,11 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
     for (const r of results) m[r.key] = applyTax(deal, a, r, tax);
     return m;
   }, [results, deal, a, tax]);
+  const prByKey = useMemo<Record<string, ProjectReturn>>(() => {
+    const m: Record<string, ProjectReturn> = {};
+    for (const r of results) m[r.key] = projectReturn(deal, a, r);
+    return m;
+  }, [results, deal, a]);
   const [wfIdx, setWfIdx] = useState(0);
   const [afterTax, setAfterTax] = useState(false);
 
@@ -62,9 +67,11 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
   }
 
   const eq0 = equityToday(deal, a);
-  const bench = eq0 * Math.pow(1 + a.hurdle, a.horizon);
-  const benchRoi = Math.pow(1 + a.hurdle, a.horizon) - 1; // ROI of the next best option over the horizon
-  const benchName = benchmarkType === "mortgage" ? BENCHMARKS.mortgage.short : BENCHMARKS[benchmarkType].short;
+  // The benchmark: sell now and grow the freed-up equity at the chosen rate.
+  const benchSeries = Array.from({ length: a.horizon + 1 }, (_, t) => eq0 * Math.pow(1 + a.hurdle, t));
+  const bench = benchSeries[a.horizon];
+  const benchRoi = eq0 > 0 ? (bench - eq0) / eq0 : 0; // ROI on today's equity, comparable to strategies
+  const benchName = BENCHMARKS[benchmarkType].short;
   const showAfterTax = afterTax && gstOk;
 
   // Switch the headline metrics between pre-tax and after-tax. `roi` = total
@@ -85,6 +92,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
   const icrBind = results.some((r) => r.binding === "ICR");
   const wf = results[Math.min(wfIdx, results.length - 1)];
   const mBest = M(bestWealth);
+  const prBest = prByKey[bestWealth.key];
 
   return (
     <>
@@ -121,8 +129,8 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
         <span className="tag">Read on the numbers</span>
         <br />
         Equity today is about <b>{fmtM(eq0)}</b> (the ~{fmtM(deal.asIsValue)} land less the {fmtM(a.mortgage)} mortgage).
-        In {benchName} at {pct(a.hurdle)} it would grow to <b>{fmtM(bench)}</b> over {a.horizon} years ({pct(benchRoi)} ROI) —
-        that&rsquo;s where the money goes if not in the project.{" "}
+        Your baseline — <b>{benchName}</b> ({pct(a.hurdle)} p.a.) — turns that into <b>{fmtM(bench)}</b> over {a.horizon} years
+        ({pct(benchRoi)} ROI). That&rsquo;s the bar each strategy must beat.{" "}
         <b>{bestWealth.name}</b> builds the most wealth ({fmtM(mBest.nw10)}, {pct(mBest.roi)} ROI) but ties up{" "}
         <b>{fmtM(mBest.freshCash + bestWealth.equityLocked)}</b> of cash
         {bestWealth.cashYield ? ` at a ${pct2(bestWealth.cashYield)} cash yield` : ""}.{" "}
@@ -136,46 +144,84 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
         )}
       </div>
 
-      {/* KPI row */}
+      {/* KPI row — leads with the development return for the best-wealth strategy */}
       <div className="grid4" style={{ marginTop: 18 }}>
-        <Kpi l="Fresh cash needed" v={fmt(mBest.freshCash)} s={bestWealth.name} />
         <Kpi
-          l="Equity locked up"
-          v={fmt(bestWealth.equityLocked)}
-          s={bestWealth.cashYield ? pct2(bestWealth.cashYield) + " cash yield" : "liquid"}
+          l="Development profit"
+          v={prBest.profit ? fmt(prBest.profit) : "—"}
+          s={prBest.profit ? pct(prBest.marginOnCost) + " margin on cost" : bestWealth.name}
         />
-        <Kpi l={`Net wealth · yr ${a.horizon}`} v={fmtM(mBest.nw10)} s={pct(mBest.cagr) + " p.a."} />
-        <Kpi l={`Return · ${a.horizon}-yr ROI`} v={pct(mBest.roi)} s={`vs ${pct(benchRoi)} in ${benchName}`} />
+        <Kpi
+          l="Cash-on-cash return"
+          v={prBest.cashOnCash != null ? pct(prBest.cashOnCash) : "—"}
+          s="on cash committed"
+        />
+        <Kpi l="Fresh cash needed" v={fmt(mBest.freshCash)} s={bestWealth.name} />
+        <Kpi l={`Net wealth · yr ${a.horizon}`} v={fmtM(mBest.nw10)} s={pct(mBest.roi) + " ROI · " + pct(mBest.cagr) + " p.a."} />
       </div>
 
-      {/* charts */}
-      <div className="grid2" style={{ marginTop: 18 }}>
-        <div className="card">
-          <h3>10-year net wealth</h3>
-          <p className="note">Net worth from the project each year vs the dashed line — the same cash in your next best option.</p>
-          <div className="chartbox" style={{ marginTop: 10 }}>
-            <WealthChart results={results} deal={deal} a={a} wealthOf={(r) => M(r).wealth} />
-          </div>
-          <div className="legend">
-            {results.map((r) => (
-              <span key={r.key}>
-                <i style={{ background: PALETTE[r.key] }} />
-                {r.name}
-              </span>
-            ))}
-            <span>
-              <i className="dash" />
-              Next best — {benchName} ({pct(a.hurdle)})
-            </span>
-          </div>
-        </div>
+      {/* project return (development margin) */}
+      <div className="card" style={{ marginTop: 18 }}>
+        <h3>Project return (development margin)</h3>
+        <p className="note">
+          What the subdivision itself earns: end value less all costs, with land in at its current market value.
+          Cash-on-cash = profit ÷ the cash actually committed (land equity + any fresh cash). Pre-tax, net of GST.
+        </p>
+        <table style={{ marginTop: 10 }}>
+          <thead>
+            <tr>
+              <th>Strategy</th>
+              <th className="num">End value</th>
+              <th className="num">Total cost</th>
+              <th className="num">Profit</th>
+              <th className="num">Margin on cost</th>
+              <th className="num">Cash-on-cash</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((r) => {
+              const p = prByKey[r.key];
+              if (r.holdAsIs) {
+                return (
+                  <tr key={r.key}>
+                    <td><b>{r.name}</b></td>
+                    <td className="num" colSpan={5} style={{ color: "var(--muted)" }}>no development — pure capital growth (see net wealth below)</td>
+                  </tr>
+                );
+              }
+              return (
+                <tr key={r.key}>
+                  <td><b>{r.name}</b></td>
+                  <td className="num">{fmtM(p.gdv)}</td>
+                  <td className="num">{fmtM(p.tdc)}</td>
+                  <td className="num" style={{ fontWeight: 700, color: p.profit >= 0 ? "var(--moss)" : "var(--red)" }}>{fmt(p.profit)}</td>
+                  <td className="num">{pct(p.marginOnCost)}</td>
+                  <td className="num" style={{ fontWeight: 700 }}>{p.cashOnCash != null ? pct(p.cashOnCash) : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-        <div className="card">
-          <h3>Cash committed vs yield</h3>
-          <p className="note">Fresh cash in plus equity locked up (bars), with the year-1 cash yield overlaid.</p>
-          <div className="chartbox" style={{ marginTop: 10 }}>
-            <CashChart results={results} />
-          </div>
+      {/* 10-year net wealth (full width) */}
+      <div className="card">
+        <h3>10-year net wealth</h3>
+        <p className="note">Net worth from each strategy over time vs the dashed line — the same equity in your next best option.</p>
+        <div className="chartbox" style={{ marginTop: 10 }}>
+          <WealthChart results={results} a={a} wealthOf={(r) => M(r).wealth} benchSeries={benchSeries} />
+        </div>
+        <div className="legend">
+          {results.map((r) => (
+            <span key={r.key}>
+              <i style={{ background: PALETTE[r.key] }} />
+              {r.name}
+            </span>
+          ))}
+          <span>
+            <i className="dash" />
+            Next best — {benchName} ({pct(a.hurdle)})
+          </span>
         </div>
       </div>
 
@@ -318,7 +364,11 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
               );
             })}
             <tr style={{ background: "var(--sand-tint)" }}>
-              <td><b>Next best: {benchName}</b><br /><small>where the cash goes if not in the project</small></td>
+              <td>
+                <b>Baseline: {benchName}</b>
+                <br />
+                <small>where the cash goes if not in the project</small>
+              </td>
               <td className="num">—</td>
               <td className="num">—</td>
               <td className="num">—</td>
@@ -394,14 +444,14 @@ function Kpi({ l, v, s }: { l: string; v: string; s: string }) {
 
 function WealthChart({
   results,
-  deal,
   a,
   wealthOf,
+  benchSeries,
 }: {
   results: Result[];
-  deal: Deal;
   a: Assumptions;
   wealthOf: (r: Result) => number[];
+  benchSeries: number[];
 }) {
   const labels = Array.from({ length: a.horizon + 1 }, (_, t) => "Yr " + t);
   const datasets = results.map((r) => ({
@@ -415,7 +465,7 @@ function WealthChart({
   }));
   datasets.push({
     label: "Next best",
-    data: benchmark(deal, a),
+    data: benchSeries,
     borderColor: "#7c7770",
     backgroundColor: "transparent",
     // @ts-expect-error chart.js accepts borderDash at runtime
@@ -438,57 +488,3 @@ function WealthChart({
   );
 }
 
-function CashChart({ results }: { results: Result[] }) {
-  return (
-    <Chart
-      type="bar"
-      data={{
-        labels: results.map((r) => r.name),
-        datasets: [
-          {
-            type: "bar" as const,
-            label: "Equity locked up",
-            data: results.map((r) => Math.round(r.equityLocked)),
-            backgroundColor: "#48773C",
-            yAxisID: "y",
-            order: 2,
-          },
-          {
-            type: "bar" as const,
-            label: "Fresh cash in",
-            data: results.map((r) => Math.round(r.freshCash)),
-            backgroundColor: "#ABC6CA",
-            yAxisID: "y",
-            order: 2,
-          },
-          {
-            type: "line" as const,
-            label: "Yr-1 cash yield",
-            data: results.map((r) => (r.cashYield ? +(r.cashYield * 100).toFixed(1) : 0)),
-            borderColor: "#3D3935",
-            backgroundColor: "#3D3935",
-            yAxisID: "y1",
-            order: 1,
-            tension: 0,
-            pointRadius: 5,
-            showLine: false,
-          },
-        ],
-      }}
-      options={{
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } },
-        scales: {
-          y: { stacked: true, ticks: { callback: (v) => "$" + (Number(v) / 1e6).toFixed(1) + "M" } },
-          y1: {
-            position: "right",
-            grid: { drawOnChartArea: false },
-            ticks: { callback: (v) => v + "%" },
-            title: { display: true, text: "cash yield" },
-          },
-        },
-      }}
-    />
-  );
-}
