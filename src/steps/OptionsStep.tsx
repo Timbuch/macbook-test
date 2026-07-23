@@ -1,15 +1,18 @@
 import type { Assumptions, Deal } from "../engine";
-import type { SalesChannel, SellDown, WhoBuilds } from "../defaults";
-import { optionSet } from "../defaults";
-import type { TaxInputs } from "../tax";
+import type { BenchmarkType, SalesChannel, SellDown, WhoBuilds } from "../defaults";
+import { BENCHMARKS, optionSet } from "../defaults";
+import type { TaxIntake } from "../tax";
+import { gstAnswered } from "../tax";
 import type { Intake } from "../App";
 
 interface Props {
   deal: Deal;
   assumptions: Assumptions;
   patch: (p: Partial<Assumptions>) => void;
-  tax: TaxInputs;
-  patchTax: (p: Partial<TaxInputs>) => void;
+  taxIntake: TaxIntake;
+  patchTax: (p: Partial<TaxIntake>) => void;
+  benchmarkType: BenchmarkType;
+  setBenchmark: (t: BenchmarkType) => void;
   intake: Intake;
   patchIntake: (p: Partial<Intake>) => void;
   keepN: number;
@@ -27,9 +30,10 @@ const OPTION_BLURB: Record<string, string> = {
 };
 
 export function OptionsStep(props: Props) {
-  const { deal, assumptions, patch, tax, patchTax, intake, patchIntake, keepN, setKeepN, selected, setSelected, onNext } =
+  const { deal, assumptions, patch, taxIntake, patchTax, benchmarkType, setBenchmark, intake, patchIntake, keepN, setKeepN, selected, setSelected, onNext } =
     props;
   const options = optionSet(keepN);
+  const gstDone = gstAnswered(taxIntake);
   const toggle = (k: string) => setSelected({ ...selected, [k]: !selected[k] });
 
   return (
@@ -160,15 +164,14 @@ export function OptionsStep(props: Props) {
           )}
         </div>
 
-        <div className="card">
+        <div className="card" style={{ borderColor: gstDone ? undefined : "var(--amber)" }}>
           <h3>Tax &amp; GST</h3>
-          <p className="note">NZ treatment — indicative. Drives the after-tax view on the analysis.</p>
+          <p className="note">
+            GST treatment is <b>specific to each project</b> — it isn&rsquo;t carried over, so confirm it below every time.
+          </p>
           <div className="field" style={{ marginTop: 10 }}>
             <label>Income tax rate / entity</label>
-            <select
-              value={tax.incomeTaxRate}
-              onChange={(e) => patchTax({ incomeTaxRate: +e.target.value })}
-            >
+            <select value={taxIntake.incomeTaxRate} onChange={(e) => patchTax({ incomeTaxRate: +e.target.value })}>
               <option value={0.28}>Company — 28%</option>
               <option value={0.33}>Trust — 33%</option>
               <option value={0.39}>Top personal — 39%</option>
@@ -176,17 +179,16 @@ export function OptionsStep(props: Props) {
           </div>
           <div className="field">
             <label>GST registration for the development</label>
-            <select
-              value={tax.gstRegistered ? "yes" : "no"}
-              onChange={(e) => patchTax({ gstRegistered: e.target.value === "yes" })}
-            >
+            <select value={taxIntake.gstRegistered} onChange={(e) => patchTax({ gstRegistered: e.target.value as TaxIntake["gstRegistered"] })}>
+              <option value="">— confirm for this project —</option>
               <option value="yes">Registered (or will register)</option>
               <option value="no">Not registered</option>
             </select>
           </div>
           <div className="field">
             <label>GST when the land was purchased</label>
-            <select value={tax.purchaseGst} onChange={(e) => patchTax({ purchaseGst: e.target.value as TaxInputs["purchaseGst"] })}>
+            <select value={taxIntake.purchaseGst} onChange={(e) => patchTax({ purchaseGst: e.target.value as TaxIntake["purchaseGst"] })}>
+              <option value="">— confirm for this project —</option>
               <option value="zero-rated">Zero-rated (going concern)</option>
               <option value="claimed">Claimed GST on purchase</option>
               <option value="second-hand">Second-hand goods credit</option>
@@ -195,25 +197,46 @@ export function OptionsStep(props: Props) {
           </div>
           <div className="field">
             <label>Retained rental homes — GST</label>
-            <select value={tax.heldGst} onChange={(e) => patchTax({ heldGst: e.target.value as TaxInputs["heldGst"] })}>
+            <select value={taxIntake.heldGst} onChange={(e) => patchTax({ heldGst: e.target.value as TaxIntake["heldGst"] })}>
+              <option value="">— confirm for this project —</option>
               <option value="exempt">Exempt — no GST claim on their build</option>
               <option value="change-of-use">Claim, then change-of-use adjustment</option>
             </select>
           </div>
-          {!tax.gstRegistered && (
+          {!gstDone && (
             <p className="note" style={{ color: "var(--amber)" }}>
-              Selling 8 sections is normally a taxable activity — GST registration is usually compulsory at this scale.
+              Confirm all three GST answers to unlock the after-tax view.
+            </p>
+          )}
+          {taxIntake.gstRegistered === "no" && (
+            <p className="note" style={{ color: "var(--amber)" }}>
+              Selling multiple sections is normally a taxable activity — GST registration is usually compulsory at this scale.
             </p>
           )}
         </div>
       </div>
 
       <div className="card">
-        <h3>Opportunity cost</h3>
-        <p className="note">The next best use of the cash — the bar every strategy has to clear.</p>
-        <div className="inline" style={{ maxWidth: 420, marginTop: 8 }}>
-          <Pct label="Hurdle / next-best return" v={assumptions.hurdle} on={(n) => patch({ hurdle: n })} />
-          <Num label="Horizon (years)" v={assumptions.horizon} on={(n) => patch({ horizon: n })} />
+        <h3>Your next best option</h3>
+        <p className="note">
+          If the cash weren&rsquo;t in this project, where would it go? Groundwork grows your equity at that return and
+          compares every strategy against it — a strategy is only worth it if it beats where the money would otherwise sit.
+        </p>
+        <div className="grid2" style={{ marginTop: 10 }}>
+          <div className="field">
+            <label>Next best use of the money</label>
+            <select value={benchmarkType} onChange={(e) => setBenchmark(e.target.value as BenchmarkType)}>
+              <option value="fund">{BENCHMARKS.fund.label} (~10%)</option>
+              <option value="mortgage">{BENCHMARKS.mortgage.label} ({(assumptions.mortgageRate * 100).toFixed(1)}%)</option>
+              <option value="termdeposit">{BENCHMARKS.termdeposit.label} (~4%)</option>
+              <option value="custom">{BENCHMARKS.custom.label}</option>
+            </select>
+            <p className="note" style={{ marginTop: 4 }}>{BENCHMARKS[benchmarkType].blurb}</p>
+          </div>
+          <div className="inline">
+            <Pct label="Return it would earn" v={assumptions.hurdle} on={(n) => patch({ hurdle: n })} />
+            <Num label="Horizon (years)" v={assumptions.horizon} on={(n) => patch({ horizon: n })} />
+          </div>
         </div>
       </div>
 

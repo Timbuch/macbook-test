@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import type { Assumptions, Deal } from "./engine";
-import type { SalesChannel, SellDown, WhoBuilds } from "./defaults";
-import { CLEVEDON_DEAL, DEFAULT_ASSUMPTIONS, withSalesChannel } from "./defaults";
-import type { TaxInputs } from "./tax";
-import { DEFAULT_TAX } from "./tax";
+import type { BenchmarkType, SalesChannel, SellDown, WhoBuilds } from "./defaults";
+import { BENCHMARKS, CLEVEDON_DEAL, DEFAULT_ASSUMPTIONS, withSalesChannel } from "./defaults";
+import type { TaxIntake } from "./tax";
+import { DEFAULT_TAX_INTAKE, gstAnswered, resolveTax } from "./tax";
 import { UploadStep } from "./steps/UploadStep";
 import { OptionsStep } from "./steps/OptionsStep";
 import { AnalysisStep } from "./steps/AnalysisStep";
@@ -20,17 +20,26 @@ export function App() {
   const [step, setStep] = useState(0);
   const [deal, setDeal] = useState<Deal>(CLEVEDON_DEAL);
   const [assumptions, setAssumptions] = useState<Assumptions>(DEFAULT_ASSUMPTIONS);
-  const [tax, setTax] = useState<TaxInputs>(DEFAULT_TAX);
+  const [taxIntake, setTaxIntake] = useState<TaxIntake>(DEFAULT_TAX_INTAKE);
+  const [benchmarkType, setBenchmarkType] = useState<BenchmarkType>("fund");
   const [intake, setIntake] = useState<Intake>({ salesChannel: "private", sellDown: "atonce", whoBuilds: "contractor" });
   const [keepN, setKeepN] = useState(2);
   const [selected, setSelected] = useState<Record<string, boolean>>({ A: true, B: false, C: true, D: false });
 
   const patch = (p: Partial<Assumptions>) => setAssumptions((a) => ({ ...a, ...p }));
-  const patchTax = (p: Partial<TaxInputs>) => setTax((t) => ({ ...t, ...p }));
+  const patchTax = (p: Partial<TaxIntake>) => setTaxIntake((t) => ({ ...t, ...p }));
   const patchIntake = (p: Partial<Intake>) => setIntake((i) => ({ ...i, ...p }));
 
-  // The deal actually fed to the engine reflects the chosen sales channel.
+  // Choosing a "next best option" also sets the comparison rate.
+  const setBenchmark = (type: BenchmarkType) => {
+    setBenchmarkType(type);
+    const rate = type === "mortgage" ? assumptions.mortgageRate : BENCHMARKS[type].rate;
+    if (rate != null) patch({ hurdle: rate });
+  };
+
   const effectiveDeal = useMemo(() => withSalesChannel(deal, intake.salesChannel), [deal, intake.salesChannel]);
+  const tax = useMemo(() => resolveTax(taxIntake), [taxIntake]);
+  const gstOk = gstAnswered(taxIntake);
 
   const go = (s: number) => {
     setStep(s);
@@ -65,17 +74,17 @@ export function App() {
       <main className="wrap">
         {step === 0 && <UploadStep deal={deal} setDeal={setDeal} onNext={() => go(2)} />}
 
-        {step === 1 && (
-          <ComingSoon dealAddress={deal.address} lots={deal.lots} onSkip={() => go(2)} />
-        )}
+        {step === 1 && <ComingSoon dealAddress={deal.address} lots={deal.lots} onSkip={() => go(2)} />}
 
         {step === 2 && (
           <OptionsStep
             deal={deal}
             assumptions={assumptions}
             patch={patch}
-            tax={tax}
+            taxIntake={taxIntake}
             patchTax={patchTax}
+            benchmarkType={benchmarkType}
+            setBenchmark={setBenchmark}
             intake={intake}
             patchIntake={patchIntake}
             keepN={keepN}
@@ -91,6 +100,8 @@ export function App() {
             deal={effectiveDeal}
             assumptions={assumptions}
             tax={tax}
+            gstOk={gstOk}
+            benchmarkType={benchmarkType}
             keepN={keepN}
             selected={selected}
             onBack={() => go(2)}

@@ -51,6 +51,19 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   horizon: 10,
 };
 
+// ── "Next best use of the money" — the plain-language comparison basis ──
+// (replaces the "hurdle rate" jargon). Each strategy's 10-year result is measured
+// against leaving the freed-up cash in whichever of these the owner would pick.
+
+export type BenchmarkType = "fund" | "mortgage" | "termdeposit" | "custom";
+
+export const BENCHMARKS: Record<BenchmarkType, { label: string; short: string; rate: number | null; blurb: string }> = {
+  fund: { label: "A property / managed fund", short: "a property fund", rate: 0.10, blurb: "Typical ~10% p.a." },
+  mortgage: { label: "Paying down the mortgage", short: "paying down the mortgage", rate: null, blurb: "Guaranteed return = your mortgage rate." },
+  termdeposit: { label: "A term deposit", short: "a term deposit", rate: 0.04, blurb: "Safe ~4% p.a." },
+  custom: { label: "Something else (set the rate)", short: "your next best option", rate: null, blurb: "Enter the return you could otherwise earn." },
+};
+
 // ── Sale & delivery intake (asked of the tool's user; feed the base deal) ──
 
 export type SalesChannel = "agent" | "private" | "tender" | "inhouse";

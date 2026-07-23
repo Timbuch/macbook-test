@@ -48,6 +48,39 @@ export const DEFAULT_TAX: TaxInputs = {
   heldGst: "exempt",
 };
 
+/**
+ * UI intake for tax/GST. GST answers are NOT carried between projects — they
+ * start blank and must be confirmed for each new project. `incomeTaxRate` keeps
+ * a sensible default (28%) since it rarely changes per deal.
+ */
+export interface TaxIntake {
+  incomeTaxRate: number;
+  gstRegistered: "" | "yes" | "no";
+  purchaseGst: "" | TaxInputs["purchaseGst"];
+  heldGst: "" | TaxInputs["heldGst"];
+}
+
+export const DEFAULT_TAX_INTAKE: TaxIntake = {
+  incomeTaxRate: 0.28,
+  gstRegistered: "",
+  purchaseGst: "",
+  heldGst: "",
+};
+
+/** True once every GST question has been answered for this project. */
+export const gstAnswered = (t: TaxIntake): boolean =>
+  t.gstRegistered !== "" && t.purchaseGst !== "" && t.heldGst !== "";
+
+/** Resolve the intake into concrete engine inputs (safe fallbacks for any blanks). */
+export function resolveTax(t: TaxIntake): TaxInputs {
+  return {
+    incomeTaxRate: t.incomeTaxRate,
+    gstRegistered: t.gstRegistered === "yes",
+    purchaseGst: (t.purchaseGst || "none") as TaxInputs["purchaseGst"],
+    heldGst: (t.heldGst || "exempt") as TaxInputs["heldGst"],
+  };
+}
+
 export interface GstPosition {
   registered: boolean;
   outputOnSales: number; // GST collected on section sales, payable to IRD

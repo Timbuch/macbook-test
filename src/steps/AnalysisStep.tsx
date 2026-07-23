@@ -14,10 +14,11 @@ import {
 import { Chart } from "react-chartjs-2";
 import type { Assumptions, Deal, Result } from "../engine";
 import { benchmark, equityToday, runOption } from "../engine";
-import { optionSet } from "../defaults";
+import type { BenchmarkType } from "../defaults";
+import { BENCHMARKS, optionSet } from "../defaults";
 import type { TaxInputs, TaxResult } from "../tax";
 import { applyTax } from "../tax";
-import { fmt, fmtM, pct, signPct } from "../format";
+import { fmt, fmtM, pct } from "../format";
 
 ChartJS.register(
   LineController, BarController, LineElement, BarElement, PointElement,
@@ -30,12 +31,14 @@ interface Props {
   deal: Deal;
   assumptions: Assumptions;
   tax: TaxInputs;
+  gstOk: boolean;
+  benchmarkType: BenchmarkType;
   keepN: number;
   selected: Record<string, boolean>;
   onBack: () => void;
 }
 
-export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBack }: Props) {
+export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, keepN, selected, onBack }: Props) {
   const results = useMemo<Result[]>(
     () => optionSet(keepN).filter((o) => selected[o.key]).map((o) => runOption(deal, a, o)),
     [deal, a, keepN, selected],
@@ -60,13 +63,19 @@ export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBac
 
   const eq0 = equityToday(deal, a);
   const bench = eq0 * Math.pow(1 + a.hurdle, a.horizon);
+  const benchRoi = Math.pow(1 + a.hurdle, a.horizon) - 1; // ROI of the next best option over the horizon
+  const benchName = benchmarkType === "mortgage" ? BENCHMARKS.mortgage.short : BENCHMARKS[benchmarkType].short;
+  const showAfterTax = afterTax && gstOk;
 
-  // Switch the headline metrics between pre-tax and after-tax.
+  // Switch the headline metrics between pre-tax and after-tax. `roi` = total
+  // return over the horizon on the equity you have today (comparable to the
+  // next best option, which grows that same equity at its rate).
   const M = (r: Result) => {
     const t = taxByKey[r.key];
-    return afterTax
-      ? { nw10: t.afterTaxNw10, cagr: t.afterTaxCagr, beats: t.afterTaxBeats, freshCash: t.afterTaxFreshCash, net1: t.afterTaxNet1, wealth: t.afterTaxWealth }
-      : { nw10: r.nw10, cagr: r.cagr, beats: r.beats, freshCash: r.freshCash, net1: r.net1, wealth: r.wealth };
+    const base = showAfterTax
+      ? { nw10: t.afterTaxNw10, cagr: t.afterTaxCagr, freshCash: t.afterTaxFreshCash, net1: t.afterTaxNet1, wealth: t.afterTaxWealth }
+      : { nw10: r.nw10, cagr: r.cagr, freshCash: r.freshCash, net1: r.net1, wealth: r.wealth };
+    return { ...base, roi: eq0 > 0 ? (base.nw10 - eq0) / eq0 : 0 };
   };
 
   const bestWealth = [...results].sort((x, y) => M(y).nw10 - M(x).nw10)[0];
@@ -87,10 +96,24 @@ export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBac
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 18 }}>
         <div className="wftabs" style={{ margin: 0 }}>
-          <button className={!afterTax ? "on" : ""} onClick={() => setAfterTax(false)}>Pre-tax</button>
-          <button className={afterTax ? "on" : ""} onClick={() => setAfterTax(true)}>After GST &amp; income tax</button>
+          <button className={!showAfterTax ? "on" : ""} onClick={() => setAfterTax(false)}>Pre-tax</button>
+          <button
+            className={showAfterTax ? "on" : ""}
+            onClick={() => setAfterTax(true)}
+            disabled={!gstOk}
+            title={gstOk ? "" : "Confirm the GST answers on the options step first"}
+            style={gstOk ? undefined : { opacity: 0.5, cursor: "not-allowed" }}
+          >
+            After GST &amp; income tax
+          </button>
         </div>
-        <small>{afterTax ? "Showing indicative after-tax figures." : "Showing pre-tax figures."}</small>
+        <small>
+          {showAfterTax
+            ? "Showing indicative after-tax figures."
+            : afterTax && !gstOk
+              ? "Confirm the GST answers on the options step to see after-tax figures."
+              : "Showing pre-tax figures."}
+        </small>
       </div>
 
       {/* recommendation */}
@@ -98,8 +121,9 @@ export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBac
         <span className="tag">Read on the numbers</span>
         <br />
         Equity today is about <b>{fmtM(eq0)}</b> (the ~{fmtM(deal.asIsValue)} land less the {fmtM(a.mortgage)} mortgage).
-        Left in a {pct(a.hurdle)} alternative that becomes <b>{fmtM(bench)}</b> in {a.horizon} years — the bar to beat.{" "}
-        <b>{bestWealth.name}</b> builds the most wealth ({fmtM(mBest.nw10)}, {pct(mBest.cagr)} p.a.) but ties up{" "}
+        In {benchName} at {pct(a.hurdle)} it would grow to <b>{fmtM(bench)}</b> over {a.horizon} years ({pct(benchRoi)} ROI) —
+        that&rsquo;s where the money goes if not in the project.{" "}
+        <b>{bestWealth.name}</b> builds the most wealth ({fmtM(mBest.nw10)}, {pct(mBest.roi)} ROI) but ties up{" "}
         <b>{fmtM(mBest.freshCash + bestWealth.equityLocked)}</b> of cash
         {bestWealth.cashYield ? ` at a ${pct(bestWealth.cashYield)} cash yield` : ""}.{" "}
         <b>{leanest.name}</b> keeps the owner most liquid.
@@ -121,14 +145,14 @@ export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBac
           s={bestWealth.cashYield ? pct(bestWealth.cashYield) + " cash yield" : "liquid"}
         />
         <Kpi l={`Net wealth · yr ${a.horizon}`} v={fmtM(mBest.nw10)} s={pct(mBest.cagr) + " p.a."} />
-        <Kpi l="Beats hurdle by" v={signPct(mBest.beats)} s={"vs " + pct(a.hurdle) + " next best"} />
+        <Kpi l={`Return · ${a.horizon}-yr ROI`} v={pct(mBest.roi)} s={`vs ${pct(benchRoi)} in ${benchName}`} />
       </div>
 
       {/* charts */}
       <div className="grid2" style={{ marginTop: 18 }}>
         <div className="card">
           <h3>10-year net wealth</h3>
-          <p className="note">Net worth from the project each year vs the benchmark (dashed) — cash out now &amp; grow the equity at the hurdle.</p>
+          <p className="note">Net worth from the project each year vs the dashed line — the same cash in your next best option.</p>
           <div className="chartbox" style={{ marginTop: 10 }}>
             <WealthChart results={results} deal={deal} a={a} wealthOf={(r) => M(r).wealth} />
           </div>
@@ -141,7 +165,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBac
             ))}
             <span>
               <i className="dash" />
-              Next best ({pct(a.hurdle)})
+              Next best — {benchName} ({pct(a.hurdle)})
             </span>
           </div>
         </div>
@@ -256,7 +280,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBac
         ) : (
           <div className="callout moss">
             <b>Fully liquid</b> — mortgage repaid, nothing retained. The owner nets {fmt(wf.net1)} and can redeploy it
-            (modelled compounding at the {pct(a.hurdle)} hurdle).
+            (modelled growing at the {pct(a.hurdle)} next-best return).
           </div>
         )}
       </div>
@@ -273,7 +297,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBac
               <th className="num">Yr-1 yield</th>
               <th className="num">Net wealth yr {a.horizon}</th>
               <th className="num">CAGR</th>
-              <th className="num">Beats hurdle</th>
+              <th className="num">{a.horizon}-yr ROI</th>
             </tr>
           </thead>
           <tbody>
@@ -287,15 +311,24 @@ export function AnalysisStep({ deal, assumptions: a, tax, keepN, selected, onBac
                   <td className="num">{r.cashYield ? pct(r.cashYield) : "—"}</td>
                   <td className="num">{fmtM(m.nw10)}</td>
                   <td className="num">{pct(m.cagr)}</td>
-                  <td className="num" style={{ color: m.beats >= 0 ? "var(--moss)" : "var(--red)", fontWeight: 700 }}>
-                    {signPct(m.beats)}
+                  <td className="num" style={{ color: m.roi >= benchRoi ? "var(--moss)" : "var(--red)", fontWeight: 700 }}>
+                    {pct(m.roi)}
                   </td>
                 </tr>
               );
             })}
+            <tr style={{ background: "var(--sand-tint)" }}>
+              <td><b>Next best: {benchName}</b><br /><small>where the cash goes if not in the project</small></td>
+              <td className="num">—</td>
+              <td className="num">—</td>
+              <td className="num">—</td>
+              <td className="num">{fmtM(bench)}</td>
+              <td className="num">{pct(a.hurdle)}</td>
+              <td className="num" style={{ fontWeight: 700 }}>{pct(benchRoi)}</td>
+            </tr>
           </tbody>
         </table>
-        <small>{afterTax ? "After GST & income tax." : "Pre-tax."}</small>
+        <small>{showAfterTax ? "After GST & income tax." : "Pre-tax."} ROI = total return over {a.horizon} years on today&rsquo;s equity.</small>
       </div>
 
       {/* tax & GST */}
