@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Groundwork — Development Feasibility, Financing &amp; Capital Strategy (Prototype)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--moss:#48773C;--wood:#3D3935;--water:#ABC6CA;--sand:#D2CDBE;--white:#FFFFFF;--moss-tint:#eef3ec;--water-tint:#eef4f5;--sand-tint:#f6f4ee;--line:#e3e0d7;}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:'Aptos','Arial',system-ui,sans-serif;color:var(--wood);background:#f4f2ec;font-size:15px;line-height:1.5}
+button{font-family:inherit}
+.app{max-width:1200px;margin:0 auto;padding:0 20px 80px}
+header.top{background:var(--wood);color:var(--sand);padding:14px 20px;position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px}
+.top .brandmark{width:34px;height:34px;border:2px solid var(--moss);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--water);font-weight:800;font-size:13px;background:rgba(72,119,60,.15)}
+.top h1{font-size:16px;margin:0;color:var(--white);letter-spacing:.5px}
+.top .prod{font-weight:800;text-transform:uppercase;letter-spacing:2px}
+.top .sub{font-size:11px;color:var(--water);letter-spacing:.5px}
+.top .spacer{flex:1}
+.spec-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sand);cursor:pointer;user-select:none}
+.spec-toggle .pill{width:38px;height:20px;background:#5a554e;border-radius:20px;position:relative;transition:.2s}
+.spec-toggle .pill::after{content:"";position:absolute;width:16px;height:16px;background:var(--sand);border-radius:50%;top:2px;left:2px;transition:.2s}
+body.spec .spec-toggle .pill{background:var(--moss)}
+body.spec .spec-toggle .pill::after{left:20px;background:var(--white)}
+.stepper{display:flex;gap:6px;margin:22px 0 26px;flex-wrap:wrap}
+.step{flex:1;min-width:150px;background:var(--white);border:1px solid var(--line);border-left:4px solid var(--sand);padding:12px 14px;border-radius:3px;cursor:pointer;transition:.15s}
+.step:hover{border-color:var(--water)}
+.step.active{border-left-color:var(--moss);box-shadow:0 2px 6px rgba(61,57,53,.08)}
+.step.done{border-left-color:var(--moss)}
+.step .n{font-size:11px;color:var(--moss);font-weight:800;letter-spacing:1px}
+.step .t{font-weight:700;font-size:14px;margin-top:2px}
+.step .d{font-size:11.5px;color:#8a857c;margin-top:1px}
+.step.done .n::after{content:" ✓"}
+.screen{display:none;animation:fade .25s ease}.screen.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h2.sc{font-size:20px;color:var(--moss);margin:0 0 4px}
+.sc-sub{color:#7c7770;margin:0 0 20px;font-size:14px}
+.card{background:var(--white);border:1px solid var(--line);border-radius:4px;padding:20px;margin-bottom:16px}
+.card.accent{border-left:4px solid var(--moss)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:860px){.grid2{grid-template-columns:1fr}}
+.btn{background:var(--moss);color:#fff;border:none;padding:11px 22px;border-radius:3px;font-weight:700;cursor:pointer;font-size:14px;transition:.15s}
+.btn:hover{background:var(--wood)}
+.btn.sec{background:#fff;color:var(--moss);border:1.5px solid var(--moss)}.btn.sec:hover{background:var(--sand-tint)}
+.btn.ghost{background:transparent;color:#7c7770;border:1px solid var(--line)}
+.actions{display:flex;justify-content:space-between;margin-top:8px}
+.drop{border:2px dashed var(--water);border-radius:6px;padding:34px;text-align:center;background:var(--water-tint);cursor:pointer;transition:.15s}
+.drop:hover{background:#e6eff0;border-color:var(--moss)}
+.drop .ic{font-size:30px}.drop h3{margin:8px 0 4px;color:var(--wood)}.drop p{margin:0;color:#7c7770;font-size:13px}
+.filechip{display:flex;align-items:center;gap:10px;background:var(--moss-tint);border:1px solid #cfe0c9;border-radius:3px;padding:10px 12px;margin-top:12px;font-size:13.5px}
+.filechip .x{width:22px;height:22px;background:var(--moss);color:#fff;border-radius:3px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.filechip .status{margin-left:auto;color:var(--moss);font-weight:700;font-size:12px}
+.chatwrap{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
+@media(max-width:900px){.chatwrap{grid-template-columns:1fr}}
+.chat{background:var(--white);border:1px solid var(--line);border-radius:4px;display:flex;flex-direction:column;height:560px}
+.chat .log{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:86%;padding:10px 13px;border-radius:10px;font-size:13.5px;line-height:1.45}
+.msg.ai{background:var(--sand-tint);border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:3px}
+.msg.me{background:var(--moss);color:#fff;align-self:flex-end;border-bottom-right-radius:3px}
+.msg.ai b{color:var(--moss)}
+.chat .bar{border-top:1px solid var(--line);padding:12px;display:flex;gap:8px}
+.chat .bar input{flex:1;border:1px solid var(--line);border-radius:3px;padding:10px;font-family:inherit;font-size:13.5px}
+.quick{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 12px}
+.quick button{background:#fff;border:1px solid var(--water);color:var(--wood);border-radius:20px;padding:6px 12px;font-size:12px;cursor:pointer}
+.quick button:hover{background:var(--water-tint)}
+.extract h4{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--moss)}
+.kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+.kv:last-child{border-bottom:none}.kv .k{color:#7c7770}.kv .v{font-weight:700}
+.kv .v.live{transition:background .5s}.kv .v.flash{background:var(--moss-tint)}
+.conf{font-size:11px;padding:1px 7px;border-radius:10px;margin-left:6px;font-weight:700}
+.conf.hi{background:var(--moss-tint);color:var(--moss)}.conf.lo{background:var(--sand);color:var(--wood)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--moss);color:#fff;text-align:left;padding:8px 10px;font-weight:700;font-size:12px}
+td{padding:8px 10px;border-bottom:1px solid var(--line)}
+tr:nth-child(even) td{background:var(--sand-tint)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.scenario-pick{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:860px){.scenario-pick{grid-template-columns:1fr}}
+.scn{border:1.5px solid var(--line);border-radius:4px;padding:14px;cursor:pointer;transition:.15s;background:#fff;position:relative}
+.scn:hover{border-color:var(--water)}
+.scn.on{border-color:var(--moss);background:var(--moss-tint)}
+.scn .tick{position:absolute;top:12px;right:12px;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff}
+.scn.on .tick{background:var(--moss);border-color:var(--moss)}
+.scn h4{margin:0 0 4px;color:var(--wood);font-size:15px}.scn p{margin:0;font-size:12.5px;color:#7c7770}
+.subhead{margin:0 0 12px;color:var(--moss);font-size:13px;text-transform:uppercase;letter-spacing:1px}
+.assump{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px 18px}
+@media(max-width:760px){.assump{grid-template-columns:1fr 1fr}}
+.fld label{display:block;font-size:12px;color:#7c7770;margin-bottom:3px}
+.fld .inp{display:flex;align-items:center;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.fld .inp span{background:var(--sand-tint);padding:9px 10px;color:#7c7770;font-size:13px;border-right:1px solid var(--line)}
+.fld input,.fld select{border:none;padding:9px 10px;flex:1;font-family:inherit;font-size:14px;width:100%;background:#fff}
+.fld input:focus,.fld select:focus{outline:2px solid var(--water)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:860px){.kpis{grid-template-columns:1fr 1fr}}
+.kpi{background:#fff;border:1px solid var(--line);border-top:3px solid var(--moss);border-radius:3px;padding:14px}
+.kpi .l{font-size:11.5px;color:#7c7770;text-transform:uppercase;letter-spacing:.5px}
+.kpi .v{font-size:23px;font-weight:800;color:var(--wood);margin-top:3px;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:12px;color:var(--moss);margin-top:1px}
+.reco{background:var(--wood);color:var(--sand);border-radius:4px;padding:18px 20px;margin-bottom:16px}
+.reco b{color:var(--white)}
+.reco .tag{display:inline-block;background:var(--moss);color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
+.chartbox{position:relative;height:300px}
+.scenario-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.scenario-tabs button{background:#fff;border:1px solid var(--line);padding:8px 14px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;color:#7c7770}
+.scenario-tabs button.on{background:var(--moss);color:#fff;border-color:var(--moss)}
+.waterfall td.pos{color:var(--moss);font-weight:700}.waterfall td.neg{color:var(--wood)}
+.waterfall tr.total td{background:var(--moss-tint)!important;font-weight:800;border-top:2px solid var(--moss)}
+.badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
+.badge.ok{background:var(--moss-tint);color:var(--moss)}
+.badge.warn{background:var(--sand);color:var(--wood)}
+.badge.icr{background:var(--water-tint);color:#2f5f6a;border:1px solid var(--water)}
+.spec-note{display:none;background:#2b2926;color:#dcd8ce;border-left:3px solid var(--water);border-radius:3px;padding:12px 14px;margin:10px 0;font-size:12.5px;line-height:1.55}
+body.spec .spec-note{display:block}
+.spec-note .h{color:var(--water);font-weight:800;text-transform:uppercase;letter-spacing:1px;font-size:11px;margin-bottom:5px}
+.spec-note code{background:#00000040;padding:1px 5px;border-radius:3px;color:#cfe0c9;font-family:ui-monospace,monospace;font-size:12px}
+.spec-hint{display:none}body.spec .spec-hint{display:inline;color:var(--moss);font-size:11px;margin-left:6px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#7c7770;margin-top:10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.legend i.dash{background:repeating-linear-gradient(90deg,#7c7770 0 4px,transparent 4px 7px);height:2px;width:16px;border-radius:0}
+small.note{color:#8a857c;font-size:11.5px}
+.foot{margin-top:30px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:#8a857c;text-align:center}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brandmark">McK</div>
+  <div><h1><span class="prod">Groundwork</span></h1><div class="sub">Development feasibility, financing &amp; capital strategy · McKenzie &amp; Co.</div></div>
+  <div class="spacer"></div>
+  <label class="spec-toggle" onclick="document.body.classList.toggle('spec')"><span>Developer spec mode</span><span class="pill"></span></label>
+</header>
+
+<div class="app">
+  <div class="spec-note" style="margin-top:18px"><div class="h">What this file is</div>
+    A clickable prototype of a reusable subdivision feasibility + capital-strategy tool, built as a static web app.
+    Pre-loaded with the real Clevedon 8-lot deal and current NZ financing settings. The Confirm chat both verifies the
+    valuation and <b>leads the owner to articulate the options</b> — sell all, or keep some for long-term growth — then the
+    engine models each on cash, serviceability and a 10-year horizon. Toggle <b>Developer spec mode</b> for build notes.</div>
+
+  <div class="stepper" id="stepper">
+    <div class="step active" data-s="0" onclick="go(0)"><div class="n">STEP 1</div><div class="t">Upload</div><div class="d">Valuation + plan</div></div>
+    <div class="step" data-s="1" onclick="go(1)"><div class="n">STEP 2</div><div class="t">Confirm &amp; explore</div><div class="d">Find the real options</div></div>
+    <div class="step" data-s="2" onclick="go(2)"><div class="n">STEP 3</div><div class="t">Options &amp; finance</div><div class="d">Strategy + funding</div></div>
+    <div class="step" data-s="3" onclick="go(3)"><div class="n">STEP 4</div><div class="t">Capital analysis</div><div class="d">Cash, ICR, 10-yr</div></div>
+  </div>
+
+  <!-- SCREEN 1 -->
+  <section class="screen active" id="s0">
+    <h2 class="sc">Start a new feasibility</h2>
+    <p class="sc-sub">Drop in the market valuation and the subdivision scheme plan. Groundwork reads them and drafts the deal for you to confirm.</p>
+    <div class="grid2">
+      <div class="card"><div class="drop" onclick="mockUpload('val')"><div class="ic">📄</div><h3>Market valuation</h3><p>PDF from Bayleys, CBRE, Colliers, TelferYoung…</p></div><div id="valchip"></div></div>
+      <div class="card"><div class="drop" onclick="mockUpload('plan')"><div class="ic">🗺️</div><h3>Scheme plan / consent</h3><p>Approved subdivision plan or resource consent</p></div><div id="planchip"></div></div>
+    </div>
+    <div class="card accent" id="parsedbox" style="display:none">
+      <h4 style="margin:0 0 6px;color:var(--moss)">✓ Documents read</h4>
+      <p style="margin:0 0 4px;font-size:13.5px">Found an <b>8-lot residential subdivision</b> at 140 Papakura-Clevedon Road, consent approved, with an "as is" value and full "as if complete" section values.</p>
+      <small class="note">Bayleys Valuations, 15 December 2025 · confidence high on 9 of 11 fields</small>
+    </div>
+    <div class="actions"><span></span><button class="btn" id="toConfirm" onclick="go(1)" style="opacity:.4;pointer-events:none">Confirm &amp; explore →</button></div>
+  </section>
+
+  <!-- SCREEN 2 -->
+  <section class="screen" id="s1">
+    <h2 class="sc">Confirm &amp; explore the options</h2>
+    <p class="sc-sub">We verify what we read, then talk through what Ed's actually weighing up — and capture the money side a valuation never covers.</p>
+    <div class="chatwrap">
+      <div class="chat"><div class="log" id="chatlog"></div><div class="quick" id="quick"></div>
+        <div class="bar"><input id="chatin" placeholder="Type a reply…" onkeydown="if(event.key==='Enter')sendChat()"><button class="btn" onclick="sendChat()">Send</button></div></div>
+      <div class="card extract">
+        <h4>Deal &amp; intent — live <span class="spec-hint">// Deal object, updated by chat</span></h4>
+        <div class="kv"><span class="k">Address</span><span class="v">140 Papakura-Clevedon Rd</span></div>
+        <div class="kv"><span class="k">Lots · consent</span><span class="v">8 · approved</span></div>
+        <div class="kv"><span class="k">"As is" value</span><span class="v">$2,500,000</span></div>
+        <div class="kv"><span class="k">Gross realisation</span><span class="v">$5,515,000</span></div>
+        <div class="kv"><span class="k">Civil / dev cost</span><span class="v">$905,000</span></div>
+        <div class="kv"><span class="k">Current mortgage</span><span class="v live" id="v-mort">— <span class="conf lo">ask</span></span></div>
+        <div class="kv"><span class="k">Dev funding</span><span class="v live" id="v-fund">— <span class="conf lo">ask</span></span></div>
+        <div class="kv"><span class="k">Homes to keep</span><span class="v live" id="v-keep">— <span class="conf lo">ask</span></span></div>
+        <div class="kv"><span class="k">Next best use</span><span class="v live" id="v-hurdle">— <span class="conf lo">ask</span></span></div>
+        <div class="kv"><span class="k">Options to model</span><span class="v live" id="v-opts">…</span></div>
+      </div>
+    </div>
+    <div class="actions"><button class="btn ghost" onclick="go(0)">← Back</button><button class="btn" onclick="go(2)">Options &amp; finance →</button></div>
+  </section>
+
+  <!-- SCREEN 3 -->
+  <section class="screen" id="s2">
+    <h2 class="sc">Options &amp; financing</h2>
+    <p class="sc-sub">The options from your chat are pre-selected. Adjust anything, then run the analysis.</p>
+
+    <div class="card">
+      <div class="subhead">Strategies to compare</div>
+      <div class="scenario-pick" id="scnpick">
+        <div class="scn on" data-k="A" onclick="toggleScn(this)"><div class="tick">✓</div><h4>A · Subdivide &amp; sell all 8</h4><p>Title the lots, sell individually. Bank the cash, stay liquid.</p></div>
+        <div class="scn" data-k="B" onclick="toggleScn(this)"><div class="tick">✓</div><h4>B · Sell in one line</h4><p>Sell all 8 sections to one buyer. Faster, lower price, lower risk.</p></div>
+        <div class="scn on" data-k="C" onclick="toggleScn(this)"><div class="tick">✓</div><h4 id="cardC-h">C · Sell 6 · build &amp; keep 2</h4><p>Sell some sections, build and hold the rest as long-term rentals.</p>
+          <div style="margin-top:10px" onclick="event.stopPropagation()"><label style="font-size:12px;color:#7c7770">Homes to keep long-term</label>
+            <div class="inp" style="display:flex;align-items:center;border:1px solid var(--line);border-radius:3px;overflow:hidden;max-width:150px;margin-top:3px">
+              <input id="a-keep" type="number" min="1" max="7" value="2" oninput="syncCardC()" style="border:none;padding:7px 9px;width:100%;font-family:inherit;font-size:14px"><span style="background:var(--sand-tint);padding:7px 9px;color:#7c7770;font-size:12px">of 8</span></div></div>
+        </div>
+        <div class="scn" data-k="D" onclick="toggleScn(this)"><div class="tick">✓</div><h4>D · Build &amp; keep all 8</h4><p>Retain the whole lot as a rental portfolio. Max wealth, max cash tied up.</p></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="subhead">Existing position &amp; how the build is funded <span class="spec-hint">// sets equity base + finance cost</span></div>
+      <div class="assump">
+        <div class="fld"><label>Current mortgage on the land</label><div class="inp"><span>$</span><input id="a-mortgage" type="number" value="1500000"></div></div>
+        <div class="fld"><label>Current mortgage rate</label><div class="inp"><input id="a-mortrate" type="number" step="0.05" value="6.0"><span>% p.a.</span></div></div>
+        <div class="fld"><label>Fund the civil &amp; build with</label><div class="inp"><select id="a-devfund"><option value="debt">Development loan</option><option value="cash">Cash / equity</option></select></div></div>
+        <div class="fld"><label>Development finance rate</label><div class="inp"><input id="a-devrate" type="number" step="0.1" value="8.5"><span>% p.a.</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="subhead">Financing &amp; serviceability (today) <span class="spec-hint">// debt = min(LVR, ICR at test rate)</span></div>
+      <div class="assump">
+        <div class="fld"><label>Funding rate (actual)</label><div class="inp"><input id="a-int" type="number" step="0.05" value="5.75"><span>% p.a.</span></div></div>
+        <div class="fld"><label>Bank servicing test rate</label><div class="inp"><input id="a-test" type="number" step="0.1" value="7.0"><span>% p.a.</span></div></div>
+        <div class="fld"><label>Required ICR (rentals)</label><div class="inp"><input id="a-icr" type="number" step="0.05" value="1.25"><span>×</span></div></div>
+        <div class="fld"><label>Refinance LVR (held homes)</label><div class="inp"><input id="a-refilvr" type="number" value="65"><span>%</span></div></div>
+        <div class="fld"><label>Owner cost basis in land</label><div class="inp"><span>$</span><input id="a-basis" type="number" value="1900000"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="subhead">Build &amp; rental assumptions</div>
+      <div class="assump">
+        <div class="fld"><label>Build cost per home</label><div class="inp"><span>$</span><input id="a-build" type="number" value="435000"></div></div>
+        <div class="fld"><label>Completed home value</label><div class="inp"><span>$</span><input id="a-hval" type="number" value="1350000"></div></div>
+        <div class="fld"><label>Rent per home</label><div class="inp"><span>$</span><input id="a-rent" type="number" value="780"><span>/wk</span></div></div>
+        <div class="fld"><label>Operating costs</label><div class="inp"><input id="a-opex" type="number" value="22"><span>% rent</span></div></div>
+        <div class="fld"><label>Rent growth</label><div class="inp"><input id="a-rentg" type="number" step="0.5" value="3"><span>% p.a.</span></div></div>
+        <div class="fld"><label>Capital growth</label><div class="inp"><input id="a-capg" type="number" step="0.5" value="4"><span>% p.a.</span></div></div>
+      </div>
+    </div>
+
+    <div class="card accent">
+      <div class="subhead">Next best use of the cash <span class="spec-hint">// opportunity-cost hurdle</span></div>
+      <p style="margin:0 0 12px;font-size:13.5px;color:#7c7770">The bar every option must beat. Set from your chat — change it to test other alternatives.</p>
+      <div class="assump">
+        <div class="fld"><label>Benchmark</label><div class="inp"><select id="a-hurdletype" onchange="setHurdle()">
+          <option value="fund">Property fund / syndicate</option><option value="debt">Repay the mortgage</option>
+          <option value="td">Term deposit</option><option value="custom">Custom</option></select></div></div>
+        <div class="fld"><label>Hurdle rate (return foregone)</label><div class="inp"><input id="a-hurdle" type="number" step="0.25" value="10"><span>% p.a.</span></div></div>
+        <div class="fld"><label>Horizon</label><div class="inp"><input id="a-horizon" type="number" value="10"><span>years</span></div></div>
+      </div>
+    </div>
+
+    <div class="actions"><button class="btn ghost" onclick="go(1)">← Back</button><button class="btn" onclick="runModel()">Run capital analysis →</button></div>
+  </section>
+
+  <!-- SCREEN 4 -->
+  <section class="screen" id="s3">
+    <h2 class="sc">Capital strategy analysis</h2>
+    <p class="sc-sub">Cash Ed needs, whether the rents service the debt today, and how each option grows his wealth over 10 years against his next best use of the money.</p>
+    <div class="reco" id="reco"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="grid2">
+      <div class="card"><h4 style="margin:0 0 4px;color:var(--moss)">10-year net wealth</h4>
+        <small class="note">Net worth from the project each year vs the benchmark (dashed) — cash out now &amp; invest the equity at the hurdle.</small>
+        <div class="chartbox" style="margin-top:10px"><canvas id="wealthChart"></canvas></div><div class="legend" id="wlegend"></div></div>
+      <div class="card"><h4 style="margin:0 0 4px;color:var(--moss)">Cash tied up vs the return it earns</h4>
+        <small class="note">Bars: Ed's cash committed at completion (fresh cash + equity locked in). Dots: year-1 cash yield on it.</small>
+        <div class="chartbox" style="margin-top:10px"><canvas id="cashChart"></canvas></div></div>
+    </div>
+    <div class="card"><h4 style="margin:0 0 10px;color:var(--moss)">Can the rents fund the debt today?</h4>
+      <small class="note">Serviceability at the funding rate and the bank's test rate. Where ICR binds, the bank lends less — so more of Ed's own cash stays locked in.</small>
+      <table style="margin-top:12px"><thead><tr><th>Strategy</th><th class="num">Homes kept</th><th class="num">Net rent (yr 1)</th><th class="num">Max debt</th><th>Limited by</th><th class="num">ICR</th><th class="num">Cashflow after interest</th><th>Fund today?</th></tr></thead><tbody id="service"></tbody></table></div>
+    <div class="card"><div class="scenario-tabs" id="wftabs"></div>
+      <h4 style="margin:0 0 10px;color:var(--moss)" id="wftitle">Money in, money out — at completion</h4>
+      <table class="waterfall"><tbody id="waterfall"></tbody></table><div id="revalnote"></div></div>
+    <div class="card"><h4 style="margin:0 0 10px;color:var(--moss)">Side by side</h4>
+      <table><thead><tr><th>Strategy</th><th class="num">Fresh cash needed</th><th class="num">Equity locked up</th><th class="num">Yr-1 cash yield</th><th class="num">Net wealth (yr 10)</th><th class="num">Return p.a.</th><th class="num">vs hurdle</th></tr></thead><tbody id="compare"></tbody></table>
+      <small class="note" style="display:block;margin-top:10px">Illustrative, GST-exclusive, before tax. "Return p.a." is compound growth of net worth from Ed's equity today (as-is value less the mortgage); "vs hurdle" compares that to the next-best-use benchmark.</small></div>
+    <div class="spec-note"><div class="h">The questions this answers</div>
+      <b>Cash-on-cash:</b> <code>freshCash</code> = new money Ed injects after recycling section sales, drawing serviceable debt and repaying the mortgage; <code>equityLocked</code> = illiquid equity in the rentals.
+      <b>Fund-ability today:</b> <code>NOI − debt×actualRate</code>; negative ⇒ annual top-up. <b>Opportunity cost:</b> 10-yr net-worth CAGR from <code>equityToday = asIs − mortgage</code> vs the hurdle.</div>
+    <div class="actions"><button class="btn ghost" onclick="go(2)">← Adjust</button><button class="btn sec" onclick="alert('Prototype: would export a branded McK feasibility + capital strategy PDF and the Excel model.')">Export report</button></div>
+  </section>
+
+  <div class="foot"><b>Groundwork</b> — prototype · McKenzie &amp; Co. · Developing great places and people<br>
+  Illustrative model for scoping only. Deal figures from the Bayleys valuation of 140 Papakura-Clevedon Road, 15 December 2025. Financing defaults reflect NZ market settings, July 2026.</div>
+</div>
+
+<script>
+const deal={address:"140 Papakura-Clevedon Road, Clevedon",lots:8,asIs:2500000,grossInclGST:5515000,oneLine:4475000,gst:0.15,civil:905000,comm:0.0275,mktgLegal:3000};
+const fmt=n=>(n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString();
+const fmtM=n=>"$"+(n/1e6).toFixed(2)+"M";
+const pct=n=>(n*100).toFixed(1)+"%";
+const exGST=i=>i/1.15;
+const val=id=>document.getElementById(id).value;
+
+function go(s){
+  document.querySelectorAll('.screen').forEach((el,i)=>el.classList.toggle('active',i===s));
+  document.querySelectorAll('.step').forEach((el,i)=>{el.classList.toggle('active',i===s);if(i<s)el.classList.add('done');});
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(s===1)startChat();
+  if(s===2)syncCardC();
+  if(s===3)runModel();
+}
+
+/* upload */
+let uploaded={val:false,plan:false};
+function mockUpload(kind){
+  uploaded[kind]=true;
+  const el=document.getElementById(kind==='val'?'valchip':'planchip');
+  const name=kind==='val'?'MV - 140 Papakura-Clevedon Road - Dec 2025.pdf':'Scheme Plan - RC approved.pdf';
+  el.innerHTML=`<div class="filechip"><div class="x">PDF</div><div>${name}</div><div class="status">reading…</div></div>`;
+  setTimeout(()=>{el.querySelector('.status').textContent='✓ read';
+    if(uploaded.val){document.getElementById('parsedbox').style.display='block';const b=document.getElementById('toConfirm');b.style.opacity=1;b.style.pointerEvents='auto';}},900);
+}
+
+/* ---- live intent panel ---- */
+function setLive(id,txt){const el=document.getElementById(id);if(!el)return;el.innerHTML=txt;el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),600);}
+
+/* ---- consultative discovery chat ---- */
+const chatScript=[
+  {ai:"Hi Tim — I've read the Bayleys valuation. It's an <b>8-lot subdivision</b> at Clevedon, consent <b>approved</b>, \"as is\" <b>$2.5M</b>, finished sections <b>$5.515M</b> incl GST (or <b>$4.475M</b> in one line). Does that match the current plan?",
+    quick:["Yes, that's right","Something changed"],me:"Yes, that's right"},
+  {ai:"Great. The residual has civil and development works around <b>$905k</b> — firm engineer's number, or run with that for now?",
+    quick:["Use $905k","I'll enter my own"],me:"Use $905k"},
+  {ai:"Now the important part, before any numbers. What's Ed <b>actually trying to do</b> here — subdivide and sell all eight to free up the capital, or keep a couple as long-term holds for the growth?",
+    quick:["Sell all, move the money on","Keep a couple long-term","Honestly, not sure yet"],me:"Keep a couple long-term",
+    apply:()=>{setLive('v-keep','2 homes');}},
+  {ai:"That changes the whole funding picture, so it's worth getting right. When you say a couple — are we talking <b>2</b>, or would he stretch to <b>3 or 4</b> if the cashflow stacks up?",
+    quick:["Start with 2","Model 2 and 4"],me:"Start with 2",
+    apply:()=>{document.getElementById('a-keep').value=2;chosen.A=true;chosen.C=true;chosen.D=false;chosen.B=false;setLive('v-keep','2 homes');setLive('v-opts','sell all · keep 2');}},
+  {ai:"Good — and I'll model <b>selling all eight</b> alongside it, so Ed can see exactly what he trades away by holding. For the two he keeps, what would each rent for, and what's a finished home worth here?",
+    quick:["$780/wk · $1.35M each","Different numbers"],me:"$780/wk · $1.35M each"},
+  {ai:"Now the money side. What's the <b>current mortgage</b> sitting against the land? It drives how much equity Ed actually has to play with.",
+    quick:["About $1.5M","It's freehold"],me:"About $1.5M",
+    apply:()=>{document.getElementById('a-mortgage').value=1500000;setLive('v-mort','$1,500,000');}},
+  {ai:"And the civil and build works — is he funding those from <b>cash</b>, or drawing a <b>development loan</b>?",
+    quick:["Development loan","Mostly cash"],me:"Development loan",
+    apply:()=>{document.getElementById('a-devfund').value='debt';setLive('v-fund','Development loan');}},
+  {ai:"I'll apply today's settings: funding around <b>5.75%</b>, but banks stress servicing near <b>7%</b> and want an <b>ICR of 1.25</b> — that usually caps how much he can borrow against low-yield rentals. Good to use those?",
+    quick:["Yes, use current settings","Enter my bank's terms"],me:"Yes, use current settings"},
+  {ai:"Last one, and it matters most. If Ed <b>didn't</b> tie this cash up, what's his <b>next best option</b> for it? A property fund, paying down debt, something else? That's the bar every strategy has to clear.",
+    quick:["A property fund ~10%","Pay down the mortgage ~6%","Not sure"],me:"A property fund ~10%",
+    apply:()=>{document.getElementById('a-hurdletype').value='fund';document.getElementById('a-hurdle').value=10;setLive('v-hurdle','Property fund · 10%');}},
+  {ai:"Perfect. So I'll compare three routes: <b>sell all 8</b>, <b>sell in one line</b> as a fallback, and <b>sell 6 · keep 2 as rentals</b> — showing the cash Ed needs, whether the rents cover the debt at today's rates, and how his wealth grows over <b>10 years</b> against a 10% fund. Hit <b>Options &amp; finance</b> to see it.",
+    apply:()=>{setLive('v-opts','sell all · one line · keep 2');}}
+];
+let chatStep=0,chatStarted=false;
+function startChat(){if(chatStarted)return;chatStarted=true;chatStep=0;document.getElementById('chatlog').innerHTML='';renderChatStep();}
+function renderChatStep(){
+  const log=document.getElementById('chatlog'),step=chatScript[chatStep];
+  if(!step){document.getElementById('quick').innerHTML='';return;}
+  setTimeout(()=>{
+    log.insertAdjacentHTML('beforeend',`<div class="msg ai">${step.ai}</div>`);log.scrollTop=log.scrollHeight;
+    const q=document.getElementById('quick');q.innerHTML='';
+    if(step.quick)step.quick.forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>advance(t);q.appendChild(b);});
+    else advanceAuto();
+  },400);
+}
+function advanceAuto(){const step=chatScript[chatStep];if(step&&step.apply)step.apply();}
+function advance(txt){
+  const log=document.getElementById('chatlog'),step=chatScript[chatStep];
+  if(txt){log.insertAdjacentHTML('beforeend',`<div class="msg me">${txt}</div>`);log.scrollTop=log.scrollHeight;}
+  if(step&&step.apply)step.apply();
+  document.getElementById('quick').innerHTML='';chatStep++;renderChatStep();
+}
+function sendChat(){const inp=document.getElementById('chatin');if(!inp.value.trim())return;advance(inp.value.trim());inp.value='';}
+
+/* options */
+const chosen={A:true,B:false,C:true,D:false};
+function toggleScn(el){const k=el.dataset.k;chosen[k]=!chosen[k];el.classList.toggle('on',chosen[k]);}
+function syncCardC(){
+  const k=Math.max(1,Math.min(7,+val('a-keep')||2));
+  document.getElementById('cardC-h').textContent=`C · Sell ${8-k} · build & keep ${k}`;
+  // reflect chosen[] into cards
+  document.querySelectorAll('.scn').forEach(el=>el.classList.toggle('on',chosen[el.dataset.k]));
+}
+const CFG={A:{name:"Sell all 8",heldN:0,oneLine:false},B:{name:"Sell in one line",heldN:0,oneLine:true},
+           C:{name:"Keep some",heldN:2,oneLine:false},D:{name:"Keep all 8",heldN:8,oneLine:false}};
+function setHurdle(){const t=document.getElementById('a-hurdletype').value;const map={fund:10,debt:+val('a-mortrate'),td:4.0};if(map[t]!==undefined)document.getElementById('a-hurdle').value=map[t];}
+
+/* engine */
+function fin(){return{
+  intRate:+val('a-int')/100,testRate:+val('a-test')/100,reqICR:+val('a-icr'),refiLVR:+val('a-refilvr')/100,
+  basis:+val('a-basis'),build:+val('a-build'),homeVal:+val('a-hval'),rentWk:+val('a-rent'),opex:+val('a-opex')/100,
+  rentG:+val('a-rentg')/100,capG:+val('a-capg')/100,hurdle:+val('a-hurdle')/100,H:+val('a-horizon'),
+  mortgage:+val('a-mortgage'),mortRate:+val('a-mortrate')/100,devFund:val('a-devfund'),devRate:+val('a-devrate')/100,devMonths:12
+};}
+const equityToday=f=>deal.asIs*0.98-f.mortgage;
+
+function runOption(cfg,f){
+  const heldN=cfg.heldN,soldN=deal.lots-heldN,gpl=deal.grossInclGST/deal.lots;
+  let sectionNet,selling;
+  if(cfg.oneLine){selling=deal.oneLine*0.015;sectionNet=exGST(deal.oneLine)-selling;}
+  else{const gs=gpl*soldN;selling=gs*deal.comm+deal.mktgLegal*soldN;sectionNet=exGST(gs)-selling;}
+  const buildHeld=f.build*heldN,heldValue=f.homeVal*heldN;
+  const NOI1=f.rentWk*52*heldN*0.95*(1-f.opex);
+  const lvrDebt=f.refiLVR*heldValue,icrDebt=heldN>0?NOI1/(f.testRate*f.reqICR):0;
+  const heldDebt=heldN>0?Math.min(lvrDebt,icrDebt):0;
+  const binding=heldN>0?(icrDebt<lvrDebt?"ICR":"LVR"):"—";
+  const icr=heldN>0?NOI1/(heldDebt*f.testRate):null;
+  const devInterest=f.devFund==='debt'?(deal.civil+buildHeld)*0.5*f.devRate*(f.devMonths/12):0;
+  const net1=sectionNet+heldDebt-deal.civil-buildHeld-f.mortgage-devInterest;
+  const freshCash=Math.max(0,-net1),equityLocked=heldValue-heldDebt;
+  const netRent1=NOI1-heldDebt*f.intRate,cashYield=heldN>0?netRent1/equityLocked:null;
+  let cash=net1,homes=heldValue,topups=0;const eq0=equityToday(f),wealth=[eq0];
+  for(let t=1;t<=f.H;t++){wealth.push(homes-heldDebt+cash);const nr=NOI1*Math.pow(1+f.rentG,t-1)-heldDebt*f.intRate;if(nr<0)topups+=-nr;cash=cash*(1+f.hurdle)+nr;homes*=(1+f.capG);}
+  const nw10=wealth[wealth.length-1],cagr=Math.pow(nw10/Math.max(eq0,1),1/f.H)-1,beats=cagr-f.hurdle;
+  const items=[];
+  if(cfg.oneLine)items.push(["Sale in one line (ex GST)",exGST(deal.oneLine),'pos'],["Selling costs (1.5%)",-selling,'neg']);
+  else items.push([soldN+" sections sold (ex GST)",exGST(gpl*soldN),'pos'],["Selling costs",-selling,'neg']);
+  if(heldN>0)items.push(["Debt drawn on "+heldN+" kept homes",heldDebt,'pos']);
+  items.push(["Civil & development works",-deal.civil,'neg']);
+  if(buildHeld>0)items.push(["Build cost — "+heldN+" homes",-buildHeld,'neg']);
+  if(f.mortgage>0)items.push(["Repay current mortgage",-f.mortgage,'neg']);
+  if(devInterest>0)items.push(["Development loan interest",-devInterest,'neg']);
+  return {key:cfg.key,name:cfg.name,heldN,soldN,heldDebt,binding,icr,freshCash,equityLocked,cashYield,netRent1,NOI1,
+    wealth,nw10,cagr,beats,net1,items,topups,devInterest,eq0};
+}
+
+let charts={};
+function runModel(){
+  const f=fin();
+  CFG.C.heldN=Math.max(1,Math.min(7,+val('a-keep')||2));
+  CFG.C.name=`Sell ${8-CFG.C.heldN} · keep ${CFG.C.heldN}`;
+  CFG.D.name="Keep all 8";
+  const results=Object.keys(chosen).filter(k=>chosen[k]).map(k=>runOption({...CFG[k],key:k},f));
+  if(!results.length){document.getElementById('reco').innerHTML='Pick at least one strategy.';return;}
+  window._results=results;window._f=f;
+  const eq0=equityToday(f),bench=eq0*Math.pow(1+f.hurdle,f.H);
+  const bestWealth=[...results].sort((a,b)=>b.nw10-a.nw10)[0];
+  const leanest=[...results].sort((a,b)=>(a.freshCash+a.equityLocked)-(b.freshCash+b.equityLocked))[0];
+  const icrBind=results.some(r=>r.binding==='ICR');
+  document.getElementById('reco').innerHTML=
+    `<span class="tag">Read on the numbers</span><br>
+     Ed's equity today is about <b>${fmtM(eq0)}</b> (the ~$2.5M land less the ${fmtM(f.mortgage)} mortgage). Left in a ${pct(f.hurdle)} alternative
+     that becomes <b>${fmtM(bench)}</b> in ${f.H} years — the bar to beat. <b>${bestWealth.name}</b> builds the most wealth
+     (${fmtM(bestWealth.nw10)}, ${pct(bestWealth.cagr)} p.a.) but ties up <b>${fmtM(bestWealth.freshCash+bestWealth.equityLocked)}</b>
+     of Ed's cash${bestWealth.cashYield?` at a ${pct(bestWealth.cashYield)} cash yield`:''}. <b>${leanest.name}</b> keeps him most liquid.
+     ${icrBind?`Keeping rentals is <b>ICR-limited</b> — at today's rents the bank lends less than the LVR allows, so Ed leaves more of his own cash in.`:''}`;
+  document.getElementById('kpis').innerHTML=[
+    ['Fresh cash needed',fmt(bestWealth.freshCash),bestWealth.name],
+    ['Equity locked up',fmt(bestWealth.equityLocked),bestWealth.cashYield?pct(bestWealth.cashYield)+' cash yield':'liquid'],
+    ['Net wealth · yr '+f.H,fmtM(bestWealth.nw10),pct(bestWealth.cagr)+' p.a.'],
+    ['Beats hurdle by',(bestWealth.beats>=0?'+':'')+pct(bestWealth.beats),'vs '+pct(f.hurdle)+' next best']
+  ].map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('');
+  document.getElementById('service').innerHTML=results.map(r=>{
+    if(r.heldN===0)return `<tr><td><b>${r.name}</b></td><td class="num">0</td><td class="num">—</td><td class="num">—</td><td>—</td><td class="num">—</td><td class="num">—</td><td><span class="badge ok">no debt held</span></td></tr>`;
+    const cf=r.netRent1;
+    return `<tr><td><b>${r.name}</b></td><td class="num">${r.heldN}</td><td class="num">${fmt(r.NOI1)}</td><td class="num">${fmt(r.heldDebt)}</td>
+      <td><span class="badge ${r.binding==='ICR'?'icr':'ok'}">${r.binding==='ICR'?'ICR (serviceability)':'LVR'}</span></td>
+      <td class="num">${r.icr.toFixed(2)}×</td><td class="num" style="color:${cf<0?'var(--wood)':'var(--moss)'};font-weight:700">${fmt(cf)}${cf<0?'/yr top-up':'/yr'}</td>
+      <td>${cf<0?'<span class="badge warn">needs top-up</span>':'<span class="badge ok">self-funding</span>'}</td></tr>`;}).join('');
+  document.getElementById('compare').innerHTML=results.map(r=>
+    `<tr><td><b>${r.name}</b></td><td class="num">${fmt(r.freshCash)}</td><td class="num">${fmt(r.equityLocked)}</td>
+     <td class="num">${r.cashYield?pct(r.cashYield):'—'}</td><td class="num">${fmtM(r.nw10)}</td><td class="num">${pct(r.cagr)}</td>
+     <td class="num" style="color:${r.beats>=0?'var(--moss)':'var(--wood)'};font-weight:700">${(r.beats>=0?'+':'')+pct(r.beats)}</td></tr>`).join('');
+  renderWaterfall(results,0);renderCharts(results,f);
+}
+
+function renderWaterfall(results,idx){
+  document.getElementById('wftabs').innerHTML=results.map((r,i)=>`<button class="${i===idx?'on':''}" onclick="renderWaterfall(window._results,${i})">${r.name}</button>`).join('');
+  const r=results[idx],f=window._f;
+  document.getElementById('wftitle').textContent='Money in, money out at completion — '+r.name;
+  let rows=r.items.map(it=>`<tr><td>${it[0]}</td><td class="num ${it[2]}">${fmt(it[1])}</td></tr>`).join('');
+  const label=r.net1>=0?'Surplus cash to Ed after completion':'Fresh cash Ed must inject';
+  rows+=`<tr class="total"><td>${label}</td><td class="num">${fmt(r.net1)}</td></tr>`;
+  document.getElementById('waterfall').innerHTML=rows;
+  let note='';
+  if(r.heldN>0){
+    note=`<div style="margin-top:12px;padding:12px 14px;background:var(--water-tint);border-left:3px solid var(--water);border-radius:3px;font-size:13px">
+      <b>Revalue &amp; refinance</b> — the ${r.heldN} kept homes are worth ${fmt(r.heldN*f.homeVal)}. The bank lends the lower of ${pct(f.refiLVR)} LVR
+      and what the rent services at the ${pct(f.testRate)} test rate — here <b>${r.binding==='ICR'?'serviceability (ICR) binds':'LVR binds'}</b>, capping debt at ${fmt(r.heldDebt)}.
+      So <b>${fmt(r.equityLocked)}</b> of Ed's equity stays in the rentals at a ${r.cashYield?pct(r.cashYield):'—'} year-one cash yield.
+      ${r.netRent1<0?`It runs <b>${fmt(-r.netRent1)}/yr negative</b> at today's funding rate — a real top-up.`:`Rent covers the interest, so it's self-funding.`}</div>`;
+  }else{
+    note=`<div style="margin-top:12px;padding:12px 14px;background:var(--moss-tint);border-left:3px solid var(--moss);border-radius:3px;font-size:13px">
+      <b>Fully liquid</b> — mortgage repaid, nothing retained. Ed nets ${fmt(r.net1)} and can redeploy it (modelled compounding at the ${pct(f.hurdle)} hurdle).</div>`;
+  }
+  document.getElementById('revalnote').innerHTML=note;
+}
+
+function renderCharts(results,f){
+  const palette={A:'#48773C',B:'#ABC6CA',C:'#3D3935',D:'#8FA96B'};
+  const labels=Array.from({length:f.H+1},(_,t)=>'Yr '+t);
+  const ds=results.map(r=>({label:r.name,data:r.wealth,borderColor:palette[r.key]||'#48773C',backgroundColor:'transparent',tension:.2,borderWidth:2.5,pointRadius:0}));
+  const eq0=equityToday(f),bench=labels.map((_,t)=>eq0*Math.pow(1+f.hurdle,t));
+  ds.push({label:'Next best',data:bench,borderColor:'#7c7770',borderDash:[6,4],borderWidth:2,pointRadius:0,tension:0});
+  if(charts.w)charts.w.destroy();
+  charts.w=new Chart(document.getElementById('wealthChart'),{type:'line',data:{labels,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'$'+(v/1e6).toFixed(0)+'M'}}}}});
+  document.getElementById('wlegend').innerHTML=results.map(r=>`<span><i style="background:${palette[r.key]}"></i>${r.name}</span>`).join('')+`<span><i class="dash"></i>Next best (${pct(f.hurdle)})</span>`;
+  if(charts.c)charts.c.destroy();
+  charts.c=new Chart(document.getElementById('cashChart'),{
+    data:{labels:results.map(r=>r.name),datasets:[
+      {type:'bar',label:'Equity locked up',data:results.map(r=>Math.round(r.equityLocked)),backgroundColor:'#48773C',yAxisID:'y',order:2},
+      {type:'bar',label:'Fresh cash in',data:results.map(r=>Math.round(r.freshCash)),backgroundColor:'#ABC6CA',yAxisID:'y',order:2},
+      {type:'line',label:'Yr-1 cash yield',data:results.map(r=>r.cashYield?+(r.cashYield*100).toFixed(1):0),borderColor:'#3D3935',backgroundColor:'#3D3935',yAxisID:'y1',order:1,tension:0,pointRadius:5,showLine:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},
+      scales:{y:{stacked:true,ticks:{callback:v=>'$'+(v/1e6).toFixed(1)+'M'}},y1:{position:'right',grid:{drawOnChartArea:false},ticks:{callback:v=>v+'%'},title:{display:true,text:'cash yield'}}}}});
+}
+</script>
+</body>
+</html>
