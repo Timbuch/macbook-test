@@ -18,7 +18,7 @@ import type { BenchmarkType } from "../defaults";
 import { BENCHMARKS, optionSet } from "../defaults";
 import type { TaxInputs, TaxResult } from "../tax";
 import { applyTax } from "../tax";
-import { fmt, fmtM, pct } from "../format";
+import { fmt, fmtM, pct, pct2 } from "../format";
 
 ChartJS.register(
   LineController, BarController, LineElement, BarElement, PointElement,
@@ -125,7 +125,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
         that&rsquo;s where the money goes if not in the project.{" "}
         <b>{bestWealth.name}</b> builds the most wealth ({fmtM(mBest.nw10)}, {pct(mBest.roi)} ROI) but ties up{" "}
         <b>{fmtM(mBest.freshCash + bestWealth.equityLocked)}</b> of cash
-        {bestWealth.cashYield ? ` at a ${pct(bestWealth.cashYield)} cash yield` : ""}.{" "}
+        {bestWealth.cashYield ? ` at a ${pct2(bestWealth.cashYield)} cash yield` : ""}.{" "}
         <b>{leanest.name}</b> keeps the owner most liquid.
         {icrBind && (
           <>
@@ -142,7 +142,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
         <Kpi
           l="Equity locked up"
           v={fmt(bestWealth.equityLocked)}
-          s={bestWealth.cashYield ? pct(bestWealth.cashYield) + " cash yield" : "liquid"}
+          s={bestWealth.cashYield ? pct2(bestWealth.cashYield) + " cash yield" : "liquid"}
         />
         <Kpi l={`Net wealth · yr ${a.horizon}`} v={fmtM(mBest.nw10)} s={pct(mBest.cagr) + " p.a."} />
         <Kpi l={`Return · ${a.horizon}-yr ROI`} v={pct(mBest.roi)} s={`vs ${pct(benchRoi)} in ${benchName}`} />
@@ -272,7 +272,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
             the lower of {pct(a.refiLVR)} LVR and what the rent services at the {pct(a.testRate)} test rate — here{" "}
             <b>{wf.binding === "ICR" ? "serviceability (ICR) binds" : "LVR binds"}</b>, capping debt at {fmt(wf.heldDebt)}.
             So <b>{fmt(wf.equityLocked)}</b> of equity stays in the rentals at a{" "}
-            {wf.cashYield ? pct(wf.cashYield) : "—"} year-one cash yield.{" "}
+            {wf.cashYield ? pct2(wf.cashYield) : "—"} year-one cash yield.{" "}
             {wf.netRent1 < 0
               ? `It runs ${fmt(-wf.netRent1)}/yr negative at today's funding rate — a real top-up.`
               : "Rent covers the interest, so it's self-funding."}
@@ -308,7 +308,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
                   <td><b>{r.name}</b></td>
                   <td className="num">{fmt(m.freshCash)}</td>
                   <td className="num">{fmt(r.equityLocked)}</td>
-                  <td className="num">{r.cashYield ? pct(r.cashYield) : "—"}</td>
+                  <td className="num">{r.cashYield ? pct2(r.cashYield) : "—"}</td>
                   <td className="num">{fmtM(m.nw10)}</td>
                   <td className="num">{pct(m.cagr)}</td>
                   <td className="num" style={{ color: m.roi >= benchRoi ? "var(--moss)" : "var(--red)", fontWeight: 700 }}>
