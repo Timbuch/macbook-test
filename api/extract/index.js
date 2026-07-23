@@ -18,6 +18,7 @@ const pdf = require("pdf-parse/lib/pdf-parse.js");
 const CLAUDE_PROXY_URL =
   process.env.CLAUDE_PROXY_URL ||
   "https://mck-claude-proxy-gbe0a9fnf4ajg4am.newzealandnorth-01.azurewebsites.net/api/claude";
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-opus-4-8";
 
 const MAX_TEXT = 60000; // keep the prompt bounded
 
@@ -73,22 +74,30 @@ module.exports = async function (context, req) {
       (planText ? `SCHEME PLAN:\n${planText.slice(0, MAX_TEXT / 3)}\n\n` : "") +
       `Extract the deal as the JSON object described. Focus on the valuation reconciliation / residual table.`;
 
+    // The mck-claude-proxy forwards to Anthropic's Messages API, so send native
+    // format ({ model, system, messages }) and read content[0].text back.
     const resp = await fetch(CLAUDE_PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ system: SYSTEM, user, max_tokens: 1500 }),
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 1500,
+        system: SYSTEM,
+        messages: [{ role: "user", content: user }],
+      }),
     });
     const raw = await resp.text();
     let data = {};
     try { data = raw ? JSON.parse(raw) : {}; } catch (_) { /* non-JSON */ }
 
-    if (!resp.ok || !data.text) {
+    const modelText = data.text ?? data.content?.[0]?.text ?? "";
+    if (!resp.ok || !modelText) {
       context.log.error(`Claude proxy ${resp.status}: ${raw.slice(0, 400)}`);
       return respond(502, { error: "proxy_error", message: `Claude proxy returned ${resp.status}.` });
     }
 
     // Strip any accidental code fences and parse the JSON deal.
-    const jsonText = data.text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+    const jsonText = modelText.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
     let parsed;
     try {
       parsed = JSON.parse(jsonText);
