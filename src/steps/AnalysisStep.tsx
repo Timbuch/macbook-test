@@ -4,6 +4,7 @@ import {
   BarElement,
   CategoryScale,
   Chart as ChartJS,
+  Filler,
   Legend,
   LineController,
   LineElement,
@@ -14,15 +15,17 @@ import {
 import { Chart } from "react-chartjs-2";
 import type { Assumptions, Deal, ProjectReturn, Result } from "../engine";
 import { equityToday, financeStructure, projectReturn, runOption, sensitivity } from "../engine";
-import type { BenchmarkType } from "../defaults";
+import type { BenchmarkType, SellDown } from "../defaults";
 import { BENCHMARKS, optionSet } from "../defaults";
 import type { TaxInputs, TaxResult } from "../tax";
 import { applyTax } from "../tax";
+import type { TimelinePoint } from "../timeline";
+import { sellMonthsFor, timeline } from "../timeline";
 import { fmt, fmtM, pct, pct2 } from "../format";
 
 ChartJS.register(
   LineController, BarController, LineElement, BarElement, PointElement,
-  CategoryScale, LinearScale, Tooltip, Legend,
+  CategoryScale, LinearScale, Tooltip, Legend, Filler,
 );
 
 const PALETTE: Record<string, string> = { A: "#48773C", B: "#ABC6CA", C: "#3D3935", D: "#8FA96B", E: "#c98a3c" };
@@ -33,12 +36,13 @@ interface Props {
   tax: TaxInputs;
   gstOk: boolean;
   benchmarkType: BenchmarkType;
+  sellDown: SellDown;
   keepN: number;
   selected: Record<string, boolean>;
   onBack: () => void;
 }
 
-export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, keepN, selected, onBack }: Props) {
+export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, sellDown, keepN, selected, onBack }: Props) {
   const results = useMemo<Result[]>(
     () => optionSet(keepN).filter((o) => selected[o.key]).map((o) => runOption(deal, a, o)),
     [deal, a, keepN, selected],
@@ -114,6 +118,7 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
   const fsBest = financeStructure(deal, a, bestWealth);
   const bestCfg = optionSet(keepN).find((o) => o.key === bestWealth.key)!;
   const sens = bestWealth.holdAsIs ? null : sensitivity(deal, a, bestCfg);
+  const tl = timeline(deal, a, bestWealth, sellMonthsFor(sellDown, bestWealth.soldN));
 
   return (
     <>
@@ -310,6 +315,30 @@ export function AnalysisStep({ deal, assumptions: a, tax, gstOk, benchmarkType, 
             <b>Break-even:</b> sale prices can fall <b>{pct(sens.breakEvenPriceDrop)}</b> before the development breaks even.
             {sens.priceDown10 < 0 && " A 10% fall already wipes out the margin — thin cover."}
           </div>
+        </div>
+      )}
+
+      {/* debt & IRR over the development programme */}
+      {tl && (
+        <div className="card">
+          <h3>Debt &amp; IRR over the programme — {bestWealth.name}</h3>
+          <p className="note">
+            How the funding is drawn and repaid month by month — the peak exposure and the equity IRR a lender assesses
+            ({sellDown === "staged" ? "staged sell-down" : "settling at completion"}, {tl.months}-month programme).
+          </p>
+          <div className="grid4" style={{ marginTop: 12 }}>
+            <Kpi l="Equity IRR (p.a.)" v={tl.irr != null ? pct(tl.irr) : "n/a"} s={`≈${tl.multiple.toFixed(1)}× over ${tl.months} mths`} />
+            <Kpi l="Peak debt" v={fmtM(tl.peakDebt)} s={`at month ${tl.peakMonth}`} />
+            <Kpi l="Construction interest" v={fmt(tl.totalInterest)} s="capitalised over the works" />
+            <Kpi l="Cash + stock returned" v={fmtM(tl.distributions)} s={`on ${fmtM(tl.equityIn)} equity in`} />
+          </div>
+          <div className="chartbox" style={{ marginTop: 14, height: 240 }}>
+            <DebtChart points={tl.points} />
+          </div>
+          <small>
+            Equity IRR is the annualised return on the owner&rsquo;s committed equity across the works and sell-down, with
+            construction interest capitalised and retained stock valued at completion. Pre-tax.
+          </small>
         </div>
       )}
 
@@ -589,6 +618,38 @@ function WealthChart({
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: { y: { ticks: { callback: (v) => "$" + (Number(v) / 1e6).toFixed(0) + "M" } } },
+      }}
+    />
+  );
+}
+
+function DebtChart({ points }: { points: TimelinePoint[] }) {
+  return (
+    <Chart
+      type="line"
+      data={{
+        labels: points.map((p) => "M" + p.month),
+        datasets: [
+          {
+            label: "Debt outstanding",
+            data: points.map((p) => Math.round(p.debt)),
+            borderColor: "#b3402f",
+            backgroundColor: "rgba(179,64,47,.08)",
+            fill: true,
+            tension: 0.2,
+            borderWidth: 2,
+            pointRadius: 0,
+          },
+        ],
+      }}
+      options={{
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { ticks: { callback: (v) => "$" + (Number(v) / 1e6).toFixed(1) + "M" } },
+          x: { ticks: { maxTicksLimit: 12 } },
+        },
       }}
     />
   );

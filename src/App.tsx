@@ -102,6 +102,7 @@ export function App() {
             tax={tax}
             gstOk={gstOk}
             benchmarkType={benchmarkType}
+            sellDown={intake.sellDown}
             keepN={keepN}
             selected={selected}
             onBack={() => go(2)}
